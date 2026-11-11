@@ -321,7 +321,7 @@ th,td{padding:9px 5px;font-size:12px}
             <input type="file" id="impFile" accept=".json" style="display:none" onchange="importJSON(event)">
           </div>
         </div>
-        <div class="card">
+        <div class="card" id="advCard">
           <h3>🛠 Advanced: link via Apps Script</h3>
           <p style="color:var(--muted);margin-bottom:10px">Every user links <b>their own</b> Google Sheet. Your accounts and transactions appear there as tables, and the same data opens on phone and PC.</p>
           <div class="form">
@@ -486,7 +486,7 @@ th,td{padding:9px 5px;font-size:12px}
    API_URL          : your CASHFLOW server (Apps Script Web App URL)
    GOOGLE_CLIENT_ID : OAuth Web Client ID (one-click Google Sheet for every user)   */
 const API_URL = 'https://script.google.com/macros/s/AKfycbzuWDXN3G9RaT5DgtDm7tUxPXnVVaH7uYqEd5ltQgtfzxw3-p9nFnfgaaeuUpDOoyU7/exec';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
-const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '135707821463-0v5s98g9acvnff859nafu64ltvvni0vc.apps.googleusercontent.com';
 const APP_VERSION = '3.0';
 /* ================= DATA ================= */
 const KEY='agac_money_v1';
@@ -570,7 +570,7 @@ async function afterAuth(me,email,pw,fresh){
   applyCfg(me);await openLocal(email,pw,me,fresh);startApp();
   if(!subActive(me.sub))openGate(false);
   handleReturn();
-  if(!S.accounts.length&&!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
+  if(!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
 async function doSignup(){
   const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value,phone=normPhone($('sPhone').value);const E=m=>$('sErr').textContent=m;
@@ -1112,6 +1112,14 @@ initGoogleLogin();
 if(!API_URL){$('lErr').textContent=$('sErr').textContent='Setup pending: server link (API_URL) is not added yet.'}
 else api('config').then(applyCfg).catch(()=>{});
 if(new URLSearchParams(location.search).get('razorpay_payment_link_id')){const o=JSON.parse(sessionStorage.getItem('wr_order')||'{}');if(o.email)$('lUser').value=o.email;$('lErr').style.color='var(--green)';$('lErr').textContent='Payment received. Login to confirm it.'}
+</script>
+<div id="gResume" style="display:none;position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#1a73e8;color:#fff;padding:10px 16px;border-radius:24px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:14px;cursor:pointer" onclick="gResume()">🔄 Google auto-save paused · Tap to resume</div>
+<script>
+function gNeedResume(){try{return !!(GOOGLE_CLIENT_ID&&typeof S!=='undefined'&&S&&S.settings&&S.settings.sheetId&&(!gTok||Date.now()>gExp))}catch(e){return false}}
+function updateGBanner(){const b=document.getElementById('gResume');if(b)b.style.display=gNeedResume()?'':'none';
+  try{const a=document.getElementById('advCard');if(a&&GOOGLE_CLIENT_ID)a.style.display='none'}catch(e){}}
+async function gResume(){try{await gAuth('');await gPush(true)}catch(e){toast('Google: '+e.message)}updateGBanner()}
+setInterval(updateGBanner,3000);
 </script>
 </body>
 </html>
