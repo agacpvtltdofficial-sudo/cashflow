@@ -161,6 +161,7 @@ th,td{padding:9px 5px;font-size:12px}
     <div class="tabs" id="authTabs"><button data-a="login" class="on" onclick="authTab('login')">Login</button><button data-a="signup" onclick="authTab('signup')">Sign up</button></div>
     <div id="authLogin">
       <div class="f"><label>Email</label><input id="lUser" type="email" autocomplete="username" autocapitalize="none" placeholder="you@gmail.com"></div>
+      <div class="f"><label>Mobile number</label><input id="sPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile"></div>
       <div class="f"><label>Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
       <div class="err" id="lErr"></div>
       <button class="btn" id="lBtn" onclick="doLogin()">Login</button>
@@ -476,7 +477,7 @@ th,td{padding:9px 5px;font-size:12px}
 /* ================= CONFIG (seller edits this) =================
    API_URL          : your CASHFLOW server (Apps Script Web App URL)
    GOOGLE_CLIENT_ID : OAuth Web Client ID (one-click Google Sheet for every user)   */
-const API_URL = '';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
+const API_URL = 'https://script.google.com/macros/s/AKfycbyQanLyGrSfDG4_Ays6ZmRrn3bft7t1P8YCk7_dU_YA7qRTxFU4q_2RsxY9kLvqkAUX/exec';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
 const GOOGLE_CLIENT_ID = '';
 const APP_VERSION = '3.0';
 /* ================= DATA ================= */
@@ -545,11 +546,11 @@ async function afterAuth(me,email,pw,fresh){
   if(!S.accounts.length&&!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
 async function doSignup(){
-  const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value;const E=m=>$('sErr').textContent=m;
-  if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');
+  const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value,phone=$('sPhone').value.replace(/[^0-9+]/g,'');const E=m=>$('sErr').textContent=m;
+  if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');if(!/^(\+?91)?[6-9]\d{9}$/.test(phone)&&!/^\+\d{10,15}$/.test(phone))return E('Enter a valid mobile number');
   if(!strong(p))return E('Password needs 8+ characters with letters and a number');if(p!==p2)return E('Passwords do not match');
   $('sBtn').disabled=true;$('sBtn').textContent='Creating…';
-  try{const me=await api('signup',{name,email,pwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Welcome, '+name.split(' ')[0]+'!')}
+  try{const me=await api('signup',{name,email,phone,pwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Welcome, '+name.split(' ')[0]+'!')}
   catch(e){E(e.message.includes('fetch')?'No internet connection':e.message)}finally{$('sBtn').disabled=false;$('sBtn').textContent='Create account';$('sPass').value=$('sPass2').value=''}
 }
 async function doLogin(){

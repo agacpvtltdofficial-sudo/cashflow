@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>CASHFLOW Admin</title>
+<style>
+:root{--bg:#0f1220;--panel:#171b2e;--panel2:#1f2440;--text:#e8eaf6;--muted:#9aa0c3;--line:#2a3055;--accent:#6c7cff;--green:#22c55e;--red:#ef4444;--amber:#f59e0b}
+body.light{--bg:#f3f5fb;--panel:#fff;--panel2:#eef1fa;--text:#1b1f36;--muted:#5d6488;--line:#dde2f0}
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Segoe UI,Roboto,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.btn{background:var(--accent);color:#fff;border:none;padding:9px 14px;border-radius:10px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}.btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.amber{background:var(--amber)}.btn.sm{padding:6px 10px;font-size:12px}
+.btn:disabled{opacity:.6}
+.wrap{max-width:1200px;margin:0 auto;padding:16px 14px 60px}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--accent),#a855f7);display:grid;place-items:center;font-size:20px}
+.brand{display:flex;gap:10px;align-items:center}.brand b{font-weight:900;letter-spacing:2px;font-size:17px}.brand small{display:block;color:var(--muted);font-size:11px;letter-spacing:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.card h3{font-size:15px;margin-bottom:12px}
+.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(4,1fr)}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stat .l{font-size:12px;color:var(--muted)}.stat .v{font-size:22px;font-weight:800;margin-top:4px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:12.5px;vertical-align:top}th{color:var(--muted);font-size:12px}
+.pill{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}.ok{background:rgba(34,197,94,.18);color:var(--green)}.ex{background:rgba(239,68,68,.18);color:var(--red)}.wt{background:rgba(245,158,11,.18);color:var(--amber)}.mu{background:var(--panel2);color:var(--muted)}
+.tabs{display:flex;gap:6px;background:var(--panel2);padding:4px;border-radius:12px;margin-bottom:14px;overflow-x:auto}
+.tabs button{flex:1;border:none;background:none;color:var(--muted);padding:9px 12px;border-radius:9px;font-weight:600;cursor:pointer;white-space:nowrap}.tabs button.on{background:var(--accent);color:#fff}
+.sec{display:none}.sec.on{display:block}
+.lock{position:fixed;inset:0;background:radial-gradient(circle at 20% 10%,#2b2f6b 0,var(--bg) 55%);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9}
+.lock .box{max-width:380px;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px 22px;text-align:center}
+.lock h2{margin:10px 0 4px;letter-spacing:2px}.lock p{color:var(--muted);font-size:12px;margin-bottom:16px}
+.err{color:var(--red);font-size:12px;min-height:16px;margin:8px 0}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 18px;border-radius:12px;display:none;font-weight:600;z-index:20;max-width:90vw}
+.plan-ed{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--panel2)}
+.plan-ed input,.plan-ed textarea{background:var(--panel)}
+.scroll{overflow-x:auto}
+.mono{font-family:monospace;font-size:12px}
+@media(max-width:860px){.g4{grid-template-columns:1fr 1fr}.g3,.g2,.form{grid-template-columns:1fr}.hide-sm{display:none}.stat .v{font-size:18px}}
+</style></head><body>
+<div class="lock" id="lock"><div class="box">
+ <div class="logo" style="margin:0 auto;width:56px;height:56px;font-size:26px">🛡️</div>
+ <h2>CASHFLOW</h2><p>Master Admin Panel</p>
+ <input type="password" id="apw" placeholder="Admin password" autocomplete="current-password">
+ <div class="err" id="lerr"></div>
+ <button class="btn" style="width:100%" id="lbtn" onclick="login()">Login</button>
+</div></div>
+
+<div class="wrap">
+<header><div class="brand"><div class="logo">🛡️</div><div><b>CASHFLOW</b><small>Master Admin Panel</small></div></div>
+<div class="row"><button class="btn ghost sm" onclick="load()">↻ Refresh</button><button class="btn ghost sm" onclick="document.body.classList.toggle('light')">🌓</button><button class="btn ghost sm" onclick="logout()">Logout</button></div></header>
+
+<div class="grid g4" id="stats" style="margin-bottom:14px"></div>
+<div class="tabs" id="tabs"><button data-t="orders" class="on">Orders</button><button data-t="users">Customers</button><button data-t="keys">Keys</button><button data-t="plans">Plans & Prices</button><button data-t="settings">Settings</button></div>
+
+<section class="sec on" id="s-orders"><div class="card">
+ <div class="row" style="justify-content:space-between;margin-bottom:12px"><select id="oFilter" style="max-width:200px" onchange="renderOrders()"><option value="pending">Pending</option><option value="paid">Paid</option><option value="rejected">Rejected</option><option value="">All</option></select><input id="oq" placeholder="Search email / order" style="max-width:280px" oninput="renderOrders()"></div>
+ <div class="scroll" id="orders"></div>
+ <p style="color:var(--muted);font-size:12px;margin-top:10px">Razorpay orders are confirmed automatically. Orders paid on your own payment link show as Pending: check the money arrived, then press Approve to email the key.</p>
+</div></section>
+
+<section class="sec" id="s-users"><div class="grid g2" style="margin-bottom:14px">
+ <div class="card"><h3>Give a key manually</h3><div class="form">
+  <div class="full"><label>Customer email</label><input id="iEmail" type="email"></div>
+  <div><label>Plan</label><select id="iPlan"></select></div><div><label>Days (blank = plan days)</label><input id="iDays" type="number"></div></div>
+  <button class="btn" style="margin-top:12px" onclick="issue()">✉ Create & email key</button></div>
+ <div class="card"><h3>Search customers</h3><input id="uq" placeholder="Name, email or mobile" oninput="renderUsers()"><div class="row" style="margin-top:10px"><select id="uFilter" onchange="renderUsers()" style="max-width:200px"><option value="">All</option><option value="active">Active plan</option><option value="none">No / expired plan</option><option value="soon">Expiring in 7 days</option><option value="blocked">Blocked</option></select><button class="btn ghost sm" onclick="csv('users')">⬇ CSV</button></div></div>
+</div><div class="card scroll" id="users"></div></section>
+
+<section class="sec" id="s-keys"><div class="card"><div class="row" style="justify-content:space-between;margin-bottom:12px"><input id="kq" placeholder="Search key or email" style="max-width:300px" oninput="renderKeys()"><button class="btn ghost sm" onclick="csv('keys')">⬇ CSV</button></div><div class="scroll" id="keys"></div></div></section>
+
+<section class="sec" id="s-plans"><div class="card"><h3>Plans shown to customers</h3>
+ <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Changes go live in every customer's app instantly. Features: separate with · or new lines. Payment link: your Razorpay/UPI/Instamojo link for that plan (not needed if Razorpay API keys are set on the server).</p>
+ <div id="planEd"></div>
+ <div class="row"><button class="btn ghost" onclick="addPlan()">+ Add plan</button><button class="btn green" onclick="savePlans()">💾 Save plans</button></div>
+</div></section>
+
+<section class="sec" id="s-settings"><div class="grid g2">
+ <div class="card"><h3>App settings (live for all customers)</h3><div class="form">
+  <div><label>App name</label><input id="stApp"></div>
+  <div><label>Free trial days for new signups (0 = none)</label><input id="stTrial" type="number" min="0"></div>
+  <div><label>Support email</label><input id="stMail"></div>
+  <div><label>Support phone / WhatsApp</label><input id="stPhone"></div>
+  <div class="full"><label>Announcement banner (blank = hide)</label><textarea id="stAnn" rows="2"></textarea></div></div>
+  <button class="btn" style="margin-top:12px" onclick="saveSettings()">💾 Save</button></div>
+ <div class="card"><h3>Payments</h3><div id="payInfo" style="line-height:1.8;color:var(--muted)"></div></div>
+</div></section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== CONFIG: paste your CASHFLOW server (Apps Script Web App) URL ===== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyQanLyGrSfDG4_Ays6ZmRrn3bft7t1P8YCk7_dU_YA7qRTxFU4q_2RsxY9kLvqkAUX/exec';
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr=n=>'₹'+(Number(n)||0).toLocaleString('en-IN');
+const dfmt=s=>s?new Date(String(s).slice(0,10)+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'-';
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2600)}
+let TOK=sessionStorage.getItem('wra_tok')||'',D=null;
+async function api(action,data){
+  if(!API_URL)throw new Error('Add API_URL at the top of this file');
+  const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action,adminToken:TOK},data||{}))});
+  const j=await r.json();if(j.relogin){logout();throw new Error('Please login again')}if(!j.ok)throw new Error(j.error||'Error');return j}
+async function login(){const pw=$('apw').value;if(!pw)return;$('lbtn').disabled=true;$('lbtn').textContent='Checking…';
+  try{const r=await api('adminLogin',{password:pw});TOK=r.adminToken;sessionStorage.setItem('wra_tok',TOK);$('apw').value='';$('lock').style.display='none';await load()}
+  catch(e){$('lerr').textContent=e.message}finally{$('lbtn').disabled=false;$('lbtn').textContent='Login'}}
+$('apw').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+function logout(){TOK='';sessionStorage.removeItem('wra_tok');D=null;$('lock').style.display='flex'}
+async function load(){try{D=await api('adminData');render()}catch(e){toast(e.message)}}
+async function act(action,data,msg){try{D=await api(action,data);render();if(msg)toast(msg)}catch(e){toast(e.message)}}
+
+function render(){
+  const act=D.users.filter(u=>u.sub.active).length,pend=D.orders.filter(o=>o.status==='pending').length;
+  const month=today().slice(0,7);const rev=D.orders.filter(o=>o.status==='paid').reduce((s,o)=>s+(+o.amount||0),0),revM=D.orders.filter(o=>o.status==='paid'&&String(o.paidOn).startsWith(month)).reduce((s,o)=>s+(+o.amount||0),0);
+  $('stats').innerHTML=`<div class="card stat"><div class="l">Customers</div><div class="v">${D.users.length}</div></div><div class="card stat"><div class="l">Active plans</div><div class="v" style="color:var(--green)">${act}</div></div><div class="card stat"><div class="l">Pending orders</div><div class="v" style="color:var(--amber)">${pend}</div></div><div class="card stat"><div class="l">Revenue (this month)</div><div class="v">${inr(revM)}</div><div class="l">Total ${inr(rev)}</div></div>`;
+  $('iPlan').innerHTML=D.plans.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} (${p.days} days)</option>`).join('');
+  renderOrders();renderUsers();renderKeys();renderPlans();
+  const s=D.settings||{};$('stApp').value=s.appName||'';$('stTrial').value=s.trialDays||0;$('stMail').value=s.supportEmail||'';$('stPhone').value=s.supportPhone||'';$('stAnn').value=s.announcement||'';
+  $('payInfo').innerHTML=D.auto?'✅ <b style="color:var(--green)">Razorpay automatic mode is ON.</b><br>Customers get a Razorpay payment link; once paid, the server checks it with Razorpay and emails the key by itself.':'🟡 <b style="color:var(--amber)">Manual mode.</b><br>Customers are sent to the payment link you set on each plan. Approve their order in Orders after the money arrives.<br><br>To make it automatic, add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your Apps Script → Project Settings → Script properties.';
+}
+const pill=s=>({pending:'<span class="pill wt">Pending</span>',paid:'<span class="pill ok">Paid</span>',rejected:'<span class="pill ex">Rejected</span>',issued:'<span class="pill wt">Not used</span>',active:'<span class="pill ok">Used</span>',revoked:'<span class="pill ex">Cancelled</span>'}[s]||`<span class="pill mu">${esc(s)}</span>`);
+function renderOrders(){const f=$('oFilter').value,q=$('oq').value.toLowerCase();const L=D.orders.filter(o=>(!f||o.status===f)&&(!q||(o.email+' '+o.orderId).toLowerCase().includes(q)));
+  $('orders').innerHTML=L.length?`<table><thead><tr><th>Order</th><th>Customer</th><th>Plan</th><th>Amount</th><th class="hide-sm">Mode</th><th>Status</th><th></th></tr></thead><tbody>${L.map(o=>`<tr><td class="mono">${esc(o.orderId)}<br><small style="color:var(--muted)">${esc(o.created.replace('T',' '))}</small></td><td>${esc(o.email)}</td><td>${esc(o.planName)}</td><td><b>${inr(o.amount)}</b></td><td class="hide-sm">${esc(o.mode)}</td><td>${pill(o.status)}</td><td style="white-space:nowrap">${o.status==='pending'?`<button class="btn green sm" onclick="approve('${esc(o.orderId)}')">✓ Approve</button> <button class="btn ghost sm" onclick="reject('${esc(o.orderId)}')">✕</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<p style="color:var(--muted);text-align:center;padding:20px">No orders here.</p>'}
+async function approve(id){const ref=prompt('Payment reference / UTR (optional):','');if(ref===null)return;await act('adminApprove',{orderId:id,paymentRef:ref||'manual'},'Approved · key emailed')}
+async function reject(id){if(confirm('Reject order '+id+'?'))await act('adminReject',{orderId:id},'Rejected')}
+function uState(u){if(u.sub.blocked)return'blocked';if(!u.sub.active)return'none';const d=(new Date(u.sub.endDate+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5;return d<=7?'soon':'active'}
+function renderUsers(){const q=$('uq').value.toLowerCase(),f=$('uFilter').value;const L=D.users.filter(u=>(!q||(u.name+' '+u.email+' '+(u.phone||'')).toLowerCase().includes(q))&&(!f||uState(u)===f||(f==='active'&&uState(u)==='soon')));
+  $('users').innerHTML=L.length?`<table><thead><tr><th>Customer</th><th>Plan</th><th>Valid till</th><th class="hide-sm">Joined</th><th class="hide-sm">Last login</th><th></th></tr></thead><tbody>${L.map(u=>{const st=uState(u);return`<tr><td><b>${esc(u.name)}</b><br><small style="color:var(--muted)">${esc(u.email)}${u.phone?' · '+esc(u.phone):''}</small></td><td>${esc(u.sub.planName||'-')}<br>${st==='blocked'?'<span class="pill ex">Blocked</span>':st==='none'?'<span class="pill mu">Inactive</span>':st==='soon'?'<span class="pill wt">Expiring</span>':'<span class="pill ok">Active</span>'}</td><td>${dfmt(u.sub.endDate)}</td><td class="hide-sm">${dfmt(u.created)}</td><td class="hide-sm">${dfmt(u.lastLogin)}</td><td style="white-space:nowrap"><button class="btn ghost sm" onclick="extend('${esc(u.email)}')">+ Days</button> <button class="btn ${u.sub.blocked?'green':'red'} sm" onclick="block('${esc(u.email)}',${!u.sub.blocked})">${u.sub.blocked?'Unblock':'Block'}</button></td></tr>`}).join('')}</tbody></table>`:'<p style="color:var(--muted);text-align:center;padding:20px">No customers found.</p>'}
+async function extend(e){const d=prompt('Add how many days to '+e+'?','30');if(!d||isNaN(+d))return;await act('adminExtend',{email:e,days:+d},'Extended')}
+async function block(e,b){if(confirm((b?'Block ':'Unblock ')+e+'?'))await act('adminBlock',{email:e,blocked:b},b?'Blocked':'Unblocked')}
+async function issue(){const email=$('iEmail').value.trim();if(!email)return toast('Enter email');await act('adminIssue',{email,planId:$('iPlan').value,days:$('iDays').value},'Key created and emailed to '+email);$('iEmail').value=$('iDays').value=''}
+function renderKeys(){const q=$('kq').value.toLowerCase();const L=D.keys.filter(k=>!q||(k.key+' '+k.email).toLowerCase().includes(q));
+  $('keys').innerHTML=L.length?`<table><thead><tr><th>Key</th><th>Customer</th><th>Plan</th><th class="hide-sm">Issued</th><th class="hide-sm">Source</th><th>Status</th><th></th></tr></thead><tbody>${L.map(k=>`<tr><td class="mono">${esc(k.key)}</td><td>${esc(k.email)}</td><td>${esc(k.planName)} · ${k.days}d</td><td class="hide-sm">${dfmt(k.created)}</td><td class="hide-sm">${esc(k.source)}</td><td>${pill(k.status)}</td><td>${k.status==='issued'?`<button class="btn red sm" onclick="revoke('${esc(k.key)}')">Cancel</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<p style="color:var(--muted);text-align:center;padding:20px">No keys yet.</p>'}
+async function revoke(k){if(confirm('Cancel unused key '+k+'?'))await act('adminRevoke',{key:k},'Key cancelled')}
+let PE=[];
+function renderPlans(){PE=JSON.parse(JSON.stringify(D.plans));drawPlans()}
+function drawPlans(){$('planEd').innerHTML=PE.map((p,i)=>`<div class="plan-ed"><div class="form">
+  <div><label>Plan name</label><input value="${esc(p.name)}" oninput="PE[${i}].name=this.value"></div>
+  <div><label>Plan ID (short, no spaces)</label><input value="${esc(p.id)}" oninput="PE[${i}].id=this.value"></div>
+  <div><label>Price (₹)</label><input type="number" value="${p.price}" oninput="PE[${i}].price=+this.value"></div>
+  <div><label>Validity (days)</label><input type="number" value="${p.days}" oninput="PE[${i}].days=+this.value"></div>
+  <div class="full"><label>Features</label><textarea rows="2" oninput="PE[${i}].features=this.value">${esc(p.features)}</textarea></div>
+  <div class="full"><label>Payment link (manual mode)</label><input value="${esc(p.payLink||'')}" placeholder="https://rzp.io/l/..." oninput="PE[${i}].payLink=this.value"></div>
+  <div class="row"><label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" style="width:auto" ${p.active?'checked':''} onchange="PE[${i}].active=this.checked"> Show to customers</label></div>
+  <div style="text-align:right"><button class="btn ghost sm" onclick="PE.splice(${i},1);drawPlans()">🗑 Remove</button></div></div></div>`).join('')}
+function addPlan(){PE.push({id:'plan'+(PE.length+1),name:'New plan',price:0,days:30,features:'',payLink:'',active:true});drawPlans()}
+async function savePlans(){if(PE.some(p=>!p.name||!p.id))return toast('Every plan needs a name and ID');const ids=PE.map(p=>p.id.toLowerCase());if(new Set(ids).size!==ids.length)return toast('Plan IDs must be different');await act('adminSavePlans',{plans:PE},'Plans saved · live now')}
+async function saveSettings(){await act('adminSaveSettings',{settings:{appName:$('stApp').value.trim()||'CASHFLOW',trialDays:String(+$('stTrial').value||0),supportEmail:$('stMail').value.trim(),supportPhone:$('stPhone').value.trim(),announcement:$('stAnn').value.trim()}},'Settings saved · live now')}
+function csv(kind){const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';let rows;
+  if(kind==='users')rows=[['Name','Email','Mobile','Plan','Valid till','Status','Joined','Last login']].concat(D.users.map(u=>[u.name,u.email,u.phone,u.sub.planName,u.sub.endDate,uState(u),u.created,u.lastLogin]));
+  else rows=[['Key','Email','Plan','Days','Status','Issued','Source']].concat(D.keys.map(k=>[k.key,k.email,k.planName,k.days,k.status,k.created,k.source]));
+  const b=new Blob(['\ufeff'+rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cashflow-'+kind+'-'+today()+'.csv';a.click()}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('on',s.id==='s-'+b.dataset.t))});
+if(!API_URL)$('lerr').textContent='Add your server URL (API_URL) at the top of this file first.';
+if(TOK){$('lock').style.display='none';load()}
+</script></body></html>

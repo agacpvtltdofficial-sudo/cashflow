@@ -15,7 +15,7 @@
 const P = PropertiesService.getScriptProperties();
 const DEFAULT_APP_URL = 'https://agacpvtltdofficial-sudo.github.io/cashflow/';
 const SH = {
-  Users:    ['email','name','salt','hash','created','planId','planName','endDate','blocked','fails','lockUntil','lastLogin'],
+  Users:    ['email','name','salt','hash','created','planId','planName','endDate','blocked','fails','lockUntil','lastLogin','phone'],
   Sessions: ['token','email','expires'],
   Plans:    ['id','name','price','days','features','payLink','active'],
   Orders:   ['orderId','email','planId','planName','amount','mode','status','linkId','linkUrl','paymentId','created','paidOn','licenseKey'],
@@ -25,7 +25,7 @@ const SH = {
 
 /* ---------- sheet helpers ---------- */
 function ss_(){ return SpreadsheetApp.getActiveSpreadsheet(); }
-function sheet_(n){ let s=ss_().getSheetByName(n); if(!s){ s=ss_().insertSheet(n); s.getRange(1,1,1,SH[n].length).setValues([SH[n]]).setFontWeight('bold'); s.setFrozenRows(1);} return s; }
+function sheet_(n){ let s=ss_().getSheetByName(n); if(!s){ s=ss_().insertSheet(n); s.setFrozenRows(1);} if(s.getLastColumn()<SH[n].length||s.getLastRow()<1) s.getRange(1,1,1,SH[n].length).setValues([SH[n]]).setFontWeight('bold'); return s; }
 function rows_(n){ const s=sheet_(n), v=s.getDataRange().getValues(), h=v.shift(); return v.map((r,i)=>{const o={_row:i+2}; h.forEach((k,j)=>o[k]=r[j]); return o;}); }
 function find_(n,k,val){ return rows_(n).find(r=>String(r[k]).toLowerCase()===String(val).toLowerCase()); }
 function add_(n,o){ sheet_(n).appendRow(SH[n].map(k=>o[k]===undefined?'':o[k])); }
@@ -87,9 +87,11 @@ function signup(b){
   const email=String(b.email||'').trim().toLowerCase(), name=String(b.name||'').trim().slice(0,60);
   if(!validEmail_(email)) return {ok:false,error:'Enter a valid email'};
   if(!name) return {ok:false,error:'Enter your name'};
+  let phone=String(b.phone||'').replace(/[^0-9+]/g,''); if(/^[6-9]\d{9}$/.test(phone)) phone='+91'+phone; else if(/^91[6-9]\d{9}$/.test(phone)) phone='+'+phone;
+  if(!/^\+\d{10,15}$/.test(phone)) return {ok:false,error:'Enter a valid mobile number'};
   if(!/^[a-f0-9]{64}$/.test(b.pwh||'')) return {ok:false,error:'Bad password data'};
   if(find_('Users','email',email)) return {ok:false,error:'This email is already registered. Please login.'};
-  const salt=rand_(24); const u={email,name,salt,hash:slow_(b.pwh,salt),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString()};
+  const salt=rand_(24); const u={email,name,salt,hash:slow_(b.pwh,salt),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:"'"+phone};
   const trial=Number(setting_('trialDays',0)); if(trial>0){ u.planId='trial'; u.planName='Free trial'; u.endDate=addDays_(today_(),trial); }
   add_('Users',u);
   return me_(find_('Users','email',email),newSession_(email));
@@ -206,7 +208,7 @@ function adminLogin(b){
   const t=rand_(48); c.put('adm:'+t,'1',21600); return {ok:true,adminToken:t};
 }
 function adminData(){
-  const users=rows_('Users').map(u=>({email:u.email,name:u.name,created:dstr_(u.created).slice(0,10),lastLogin:dstr_(u.lastLogin).slice(0,10),sub:sub_(u)}));
+  const users=rows_('Users').map(u=>({email:u.email,name:u.name,phone:String(u.phone||''),created:dstr_(u.created).slice(0,10),lastLogin:dstr_(u.lastLogin).slice(0,10),sub:sub_(u)}));
   const orders=rows_('Orders').map(o=>({orderId:o.orderId,email:o.email,planName:o.planName,amount:o.amount,mode:o.mode,status:o.status,created:dstr_(o.created).slice(0,16),paidOn:dstr_(o.paidOn).slice(0,10)})).reverse();
   const keys=rows_('Licenses').map(l=>({key:l.key,email:l.email,planName:l.planName,days:l.days,status:l.status,created:dstr_(l.created).slice(0,10),source:l.source})).reverse();
   const settings={}; rows_('Settings').forEach(r=>settings[r.key]=r.value);
