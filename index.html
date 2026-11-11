@@ -534,7 +534,7 @@ async function api(action,data){
   const j=await r.json();if(j.relogin&&S){toast('Session expired, please login again');logout()}return j}
 async function sha256hex(t){return[...new Uint8Array(await crypto.subtle.digest('SHA-256',te.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('')}
 const pwHash=(email,pw)=>sha256hex('workrow|'+email+'|'+pw);
-function applyCfg(c){if(!c)return;['plans','appName','announcement','supportEmail','supportPhone','auto'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
+function applyCfg(c){if(!c)return;['plans','appName','announcement','supportEmail','supportPhone','auto','upiId','upiName','qrUrl'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
 const subActive=sub=>!!(sub&&sub.endDate&&sub.endDate>=today()&&!sub.blocked);
 /* ---- auth ---- */
 function authTab(t){document.querySelectorAll('#authTabs button').forEach(b=>b.classList.toggle('on',b.dataset.a===t));$('authLogin').style.display=t==='login'?'':'none';$('authSignup').style.display=t==='signup'?'':'none';$('authForgot').style.display=t==='forgot'?'':'none';$('lErr').textContent=$('sErr').textContent=$('fErr').textContent=''}
@@ -611,10 +611,17 @@ async function buyPlan(id,btn){
   try{const r=await api('buy',{token:SES.token,planId:id,returnUrl:location.origin+location.pathname});if(!r.ok)return toast(r.error);
     sessionStorage.setItem('wr_order',JSON.stringify({orderId:r.orderId,mode:r.mode,email:SES.user}));
     if(r.mode==='razorpay'){location.href=r.payUrl;return}
+    if(r.mode==='upi'){const up='upi://pay?pa='+encodeURIComponent(CFG.upiId)+'&pn='+encodeURIComponent(CFG.upiName||CFG.appName||'CASHFLOW')+'&am='+r.amount+'&cu=INR&tn='+encodeURIComponent(r.orderId);
+      const qr=CFG.qrUrl||('https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(up));
+      $('gateMsg').innerHTML=`<div class="banner" style="text-align:center"><b>Pay ₹${esc(r.amount)} for ${esc(r.planName)}</b><br><small>Scan with PhonePe, Paytm, Google Pay or any UPI app</small><br><img src="${esc(qr)}" alt="UPI QR" style="width:200px;height:200px;margin:10px auto;display:block;background:#fff;border-radius:10px;padding:6px"><div>UPI ID: <b>${esc(CFG.upiId)}</b></div><a class="btn ghost sm" style="margin:8px 0;display:inline-block" href="${esc(up)}">Open UPI app</a><div class="f" style="text-align:left;margin-top:8px"><label>After paying, enter the UTR / transaction ID (12 digits)</label><input id="utrIn" inputmode="numeric" placeholder="e.g. 431234567890"></div><button class="btn" id="utrBtn" onclick="sendUtr('${esc(r.orderId)}')">Submit payment details</button><div class="err" id="utrErr"></div></div>`;return}
     window.open(r.payUrl,'_blank','noopener');
     $('gateMsg').innerHTML=`<div class="banner">After paying, your activation key will be emailed to <b>${esc(SES.user)}</b> once the payment is confirmed (order ${esc(r.orderId)}). Then enter it below.</div>`}
   catch(e){toast('No internet connection')}finally{btn.disabled=false;btn.textContent='Buy again'}
 }
+async function sendUtr(orderId){const E=m=>$('utrErr').textContent=m;$('utrBtn').disabled=true;
+  try{const r=await api('submitUtr',{token:SES.token,orderId,utr:$('utrIn').value});if(!r.ok)return E(r.error);
+    $('gateMsg').innerHTML=`<div class="banner">Thank you! We are checking your payment. Your activation key will be emailed to <b>${esc(SES.user)}</b> after confirmation (order ${esc(orderId)}). Then enter it below.</div>`}
+  catch(e){E('No internet connection')}finally{const b=$('utrBtn');if(b)b.disabled=false}}
 async function handleReturn(){
   const q=new URLSearchParams(location.search);const link=q.get('razorpay_payment_link_id');if(!link)return;
   history.replaceState(null,'',location.pathname);

@@ -60,7 +60,7 @@ function setup(){
 function doGet(e){ return out_({ok:true,app:'CASHFLOW server'}); }
 function doPost(e){
   let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
-  const pub={config,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
+  const pub={config,submitUtr,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
   const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject};
   const lock=LockService.getScriptLock();
   try{
@@ -74,7 +74,7 @@ function doPost(e){
 
 /* ---------- public config ---------- */
 function plans_(all){ return rows_('Plans').filter(p=>all||String(p.active).toLowerCase()!=='no').map(p=>({id:String(p.id),name:p.name,price:Number(p.price),days:Number(p.days),features:p.features,hasLink:!!p.payLink,active:String(p.active).toLowerCase()!=='no'})); }
-function config(){ return {ok:true,plans:plans_(),appName:setting_('appName','CASHFLOW'),supportEmail:setting_('supportEmail',''),supportPhone:setting_('supportPhone',''),announcement:setting_('announcement',''),auto:!!(P.getProperty('RAZORPAY_KEY_ID')&&P.getProperty('RAZORPAY_KEY_SECRET'))}; }
+function config(){ return {ok:true,plans:plans_(),appName:setting_('appName','CASHFLOW'),supportEmail:setting_('supportEmail',''),supportPhone:setting_('supportPhone',''),announcement:setting_('announcement',''),upiId:setting_('upiId',''),upiName:setting_('upiName',''),qrUrl:setting_('qrUrl',''),auto:!!(P.getProperty('RAZORPAY_KEY_ID')&&P.getProperty('RAZORPAY_KEY_SECRET'))}; }
 
 /* ---------- accounts ---------- */
 function validEmail_(e){ return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e||''); }
@@ -156,12 +156,14 @@ function buy(b){
       notes:{email:u.email,planId:String(p.id),orderId},callback_url:(b.returnUrl||(P.getProperty('APP_URL')||DEFAULT_APP_URL)||''),callback_method:'get'});
     if(!r.short_url) return {ok:false,error:'Payment gateway error: '+((r.error&&r.error.description)||'unknown')};
     o.mode='razorpay'; o.linkId=r.id; o.linkUrl=r.short_url;
+  } else if(String(setting_('upiId',''))){
+    o.mode='upi'; o.linkUrl='';
   } else {
     if(!p.payLink) return {ok:false,error:'Payment link for this plan is not set yet. Contact support.'};
     o.mode='manual'; o.linkUrl=p.payLink;
   }
   add_('Orders',o);
-  return {ok:true,orderId,payUrl:o.linkUrl,mode:o.mode};
+  return {ok:true,orderId,payUrl:o.linkUrl,mode:o.mode,amount:o.amount,planName:p.name};
 }
 function rzp_(method,path,payload){
   const auth=Utilities.base64Encode(P.getProperty('RAZORPAY_KEY_ID')+':'+P.getProperty('RAZORPAY_KEY_SECRET'));
@@ -192,6 +194,17 @@ function checkPendingOrders(){
   try{ const cut=new Date(); cut.setDate(cut.getDate()-3);
     rows_('Orders').filter(o=>o.status==='pending'&&o.mode==='razorpay'&&new Date(o.created)>cut).forEach(o=>{ try{settleOrder_(o);}catch(e){} });
   } finally { lock.releaseLock(); }
+}
+
+function submitUtr(b){
+  const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const utr=String(b.utr||'').trim().toUpperCase().replace(/\s+/g,''); if(!/^[A-Z0-9]{6,22}$/.test(utr)) return {ok:false,error:'Enter the 12-digit UTR / transaction ID from your payment app'};
+  const o=find_('Orders','orderId',b.orderId); if(!o||o.email!==u.email) return {ok:false,error:'Order not found'};
+  if(o.status!=='pending') return {ok:false,error:'This order is already '+o.status};
+  if(rows_('Orders').some(x=>String(x.paymentId).toUpperCase()===utr&&x.orderId!==o.orderId)) return {ok:false,error:'This UTR is already used on another order'};
+  upd_('Orders',o,{paymentId:utr});
+  const to=setting_('supportEmail',''); if(to) try{ MailApp.sendEmail({to,subject:'New payment to approve: '+o.planName+' ₹'+o.amount,htmlBody:'<p><b>'+u.name+'</b> ('+u.email+') says they paid <b>₹'+o.amount+'</b> for <b>'+o.planName+'</b>.</p><p>UTR: <b>'+utr+'</b><br>Order: '+o.orderId+'</p><p>Check your bank/UPI app, then open the Admin Panel and press Approve to email the key.</p>'}); }catch(e){}
+  return {ok:true};
 }
 
 /* ---------- keys ---------- */
@@ -232,7 +245,7 @@ function adminLogin(b){
 }
 function adminData(){
   const users=rows_('Users').map(u=>({email:u.email,name:u.name,phone:String(u.phone||''),created:dstr_(u.created).slice(0,10),lastLogin:dstr_(u.lastLogin).slice(0,10),sub:sub_(u)}));
-  const orders=rows_('Orders').map(o=>({orderId:o.orderId,email:o.email,planName:o.planName,amount:o.amount,mode:o.mode,status:o.status,created:dstr_(o.created).slice(0,16),paidOn:dstr_(o.paidOn).slice(0,10)})).reverse();
+  const orders=rows_('Orders').map(o=>({orderId:o.orderId,email:o.email,planName:o.planName,amount:o.amount,mode:o.mode,status:o.status,utr:String(o.paymentId||''),created:dstr_(o.created).slice(0,16),paidOn:dstr_(o.paidOn).slice(0,10)})).reverse();
   const keys=rows_('Licenses').map(l=>({key:l.key,email:l.email,planName:l.planName,days:l.days,status:l.status,created:dstr_(l.created).slice(0,10),source:l.source})).reverse();
   const settings={}; rows_('Settings').forEach(r=>settings[r.key]=r.value);
   const plans=rows_('Plans').map(p=>({id:String(p.id),name:p.name,price:Number(p.price),days:Number(p.days),features:p.features,payLink:p.payLink,active:String(p.active).toLowerCase()!=='no'}));
@@ -251,7 +264,7 @@ function adminExtend(b){ const u=find_('Users','email',b.email); if(!u) return {
   const cur=dstr_(u.endDate); const start=(cur&&cur>=today_())?cur:today_(); upd_('Users',u,{endDate:addDays_(start,Number(b.days)||0),planName:u.planName||'Manual',planId:u.planId||'manual'}); return adminData(); }
 function adminBlock(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'}; upd_('Users',u,{blocked:b.blocked?'yes':''}); return adminData(); }
 function adminRevoke(b){ const L=find_('Licenses','key',b.key); if(!L) return {ok:false,error:'Key not found'}; upd_('Licenses',L,{status:'revoked'}); return adminData(); }
-function adminApprove(b){ const o=find_('Orders','orderId',b.orderId); if(!o||o.status!=='pending') return {ok:false,error:'Order not pending'}; fulfil_(o,String(b.paymentRef||'manual'),'manual'); return adminData(); }
+function adminApprove(b){ const o=find_('Orders','orderId',b.orderId); if(!o||o.status!=='pending') return {ok:false,error:'Order not pending'}; fulfil_(o,String(b.paymentRef||o.paymentId||'manual'),'manual'); return adminData(); }
 function adminReject(b){ const o=find_('Orders','orderId',b.orderId); if(!o) return {ok:false,error:'Order not found'}; upd_('Orders',o,{status:'rejected'}); return adminData(); }
 
 /* ---------- housekeeping ---------- */
