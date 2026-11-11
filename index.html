@@ -160,16 +160,24 @@ th,td{padding:9px 5px;font-size:12px}
     <p class="s">Smart money manager · Private & encrypted</p>
     <div class="tabs" id="authTabs"><button data-a="login" class="on" onclick="authTab('login')">Login</button><button data-a="signup" onclick="authTab('signup')">Sign up</button></div>
     <div id="authLogin">
+      <div class="gbox" style="display:none"><div class="gbtn"></div><div style="display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--muted);font-size:12px"><span style="flex:1;height:1px;background:var(--line,#8884)"></span>or<span style="flex:1;height:1px;background:var(--line,#8884)"></span></div></div>
       <div class="f"><label>Email</label><input id="lUser" type="email" autocomplete="username" autocapitalize="none" placeholder="you@gmail.com"></div>
-      <div class="f"><label>Mobile number</label><input id="sPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile"></div>
       <div class="f"><label>Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
       <div class="err" id="lErr"></div>
       <button class="btn" id="lBtn" onclick="doLogin()">Login</button>
       <div style="text-align:center;margin-top:10px"><a href="#" style="color:var(--accent);font-size:12px" onclick="authTab('forgot');return false">Forgot password?</a></div>
     </div>
+    <div id="authGPhone" style="display:none">
+      <p style="font-size:13px;margin:0 0 10px">One last step: add your mobile number.</p>
+      <div class="f"><label>Mobile number</label><input id="gPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile"></div>
+      <div class="err" id="gErr"></div>
+      <button class="btn" id="gBtn" onclick="googleFinish()">Continue</button>
+    </div>
     <div id="authSignup" style="display:none">
+      <div class="gbox" style="display:none"><div class="gbtn"></div><div style="display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--muted);font-size:12px"><span style="flex:1;height:1px;background:var(--line,#8884)"></span>or<span style="flex:1;height:1px;background:var(--line,#8884)"></span></div></div>
       <div class="f"><label>Full name</label><input id="sName" autocomplete="name"></div>
       <div class="f"><label>Email (your Gmail works best)</label><input id="sUser" type="email" autocapitalize="none" autocomplete="username" placeholder="you@gmail.com"></div>
+      <div class="f"><label>Mobile number</label><input id="sPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile"></div>
       <div class="f"><label>Password (8+ characters with a number)</label><input id="sPass" type="password" autocomplete="new-password"></div>
       <div class="f"><label>Confirm password</label><input id="sPass2" type="password" autocomplete="new-password"></div>
       <div class="err" id="sErr"></div>
@@ -539,6 +547,25 @@ async function openLocal(email,pw,me,fresh){
   let data=null;if(raw){try{data=await decObj(key,JSON.parse(raw))}catch(e){if(!confirm('Data on this device was locked with an older password.\n\nOK = clear it here and load from your Google Sheet'))throw new Error('Could not open local data');rec.ks=b64(rnd(16));setUsers(U);return openLocal(email,pw,me,true)}}
   SES={user:email,key:await pbk(pw,ub64(rec.ks),'key'),token:me.token};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;save(true);
 }
+
+function normPhone(v){let p=String(v||'').replace(/[^0-9+]/g,'');if(/^0[6-9]\d{9}$/.test(p))p=p.slice(1);if(/^[6-9]\d{9}$/.test(p))return'+91'+p;if(/^91[6-9]\d{9}$/.test(p))return'+'+p;if(/^\+\d{10,15}$/.test(p))return p;return''}
+let G_TOK=null;
+function initGoogleLogin(){
+  if(!GOOGLE_CLIENT_ID)return;
+  if(!(window.google&&google.accounts&&google.accounts.id))return setTimeout(initGoogleLogin,300);
+  google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:r=>googleAuth(r.credential)});
+  document.querySelectorAll('.gbox').forEach(b=>{b.style.display='';google.accounts.id.renderButton(b.querySelector('.gbtn'),{theme:'outline',size:'large',width:300,text:'continue_with',shape:'pill'})});
+}
+async function googleAuth(idToken,phone){
+  const E=m=>{($('authGPhone').style.display===''?$('gErr'):($('authSignup').style.display===''?$('sErr'):$('lErr'))).textContent=m};
+  try{toast('Signing in with Google…');const me=await api('googleAuth',{idToken,phone:phone||''});
+    if(me.needPhone){G_TOK=idToken;['authLogin','authSignup','authForgot'].forEach(i=>$(i).style.display='none');$('authTabs').style.display='none';$('authGPhone').style.display='';return}
+    if(!me.ok)return E(me.error);
+    $('authGPhone').style.display='none';$('authTabs').style.display='';
+    await afterAuth(me,me.email,me.dataKey,!!me.isNew);toast('Welcome, '+String(me.name||'').split(' ')[0]+'!')}
+  catch(e){E(e.message.includes('fetch')?'No internet connection':e.message)}
+}
+function googleFinish(){const p=normPhone($('gPhone').value);if(!p)return $('gErr').textContent='Enter your 10-digit mobile number';$('gBtn').disabled=true;googleAuth(G_TOK,p).finally(()=>$('gBtn').disabled=false)}
 async function afterAuth(me,email,pw,fresh){
   applyCfg(me);await openLocal(email,pw,me,fresh);startApp();
   if(!subActive(me.sub))openGate(false);
@@ -546,8 +573,8 @@ async function afterAuth(me,email,pw,fresh){
   if(!S.accounts.length&&!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
 async function doSignup(){
-  const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value,phone=$('sPhone').value.replace(/[^0-9+]/g,'');const E=m=>$('sErr').textContent=m;
-  if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');if(!/^(\+?91)?[6-9]\d{9}$/.test(phone)&&!/^\+\d{10,15}$/.test(phone))return E('Enter a valid mobile number');
+  const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value,phone=normPhone($('sPhone').value);const E=m=>$('sErr').textContent=m;
+  if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');if(!phone)return E('Enter your 10-digit mobile number');
   if(!strong(p))return E('Password needs 8+ characters with letters and a number');if(p!==p2)return E('Passwords do not match');
   $('sBtn').disabled=true;$('sBtn').textContent='Creating…';
   try{const me=await api('signup',{name,email,phone,pwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Welcome, '+name.split(' ')[0]+'!')}
@@ -1074,6 +1101,7 @@ function loadDemo(){
 applyTheme();
 if(!window.crypto||!crypto.subtle){document.querySelector('#auth .sec').innerHTML='<b style="color:var(--red)">Open CASHFLOW over https (or from your computer) — secure encryption is not available on this connection.</b>'}
 if(!Object.keys(getUsers()).length)authTab('signup');
+initGoogleLogin();
 if(!API_URL){$('lErr').textContent=$('sErr').textContent='Setup pending: server link (API_URL) is not added yet.'}
 else api('config').then(applyCfg).catch(()=>{});
 if(new URLSearchParams(location.search).get('razorpay_payment_link_id')){const o=JSON.parse(sessionStorage.getItem('wr_order')||'{}');if(o.email)$('lUser').value=o.email;$('lErr').style.color='var(--green)';$('lErr').textContent='Payment received. Login to confirm it.'}

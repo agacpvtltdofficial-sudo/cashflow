@@ -15,7 +15,7 @@
 const P = PropertiesService.getScriptProperties();
 const DEFAULT_APP_URL = 'https://agacpvtltdofficial-sudo.github.io/cashflow/';
 const SH = {
-  Users:    ['email','name','salt','hash','created','planId','planName','endDate','blocked','fails','lockUntil','lastLogin','phone'],
+  Users:    ['email','name','salt','hash','created','planId','planName','endDate','blocked','fails','lockUntil','lastLogin','phone','dataKey','google'],
   Sessions: ['token','email','expires'],
   Plans:    ['id','name','price','days','features','payLink','active'],
   Orders:   ['orderId','email','planId','planName','amount','mode','status','linkId','linkUrl','paymentId','created','paidOn','licenseKey'],
@@ -60,7 +60,7 @@ function setup(){
 function doGet(e){ return out_({ok:true,app:'CASHFLOW server'}); }
 function doPost(e){
   let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
-  const pub={config,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
+  const pub={config,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
   const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject};
   const lock=LockService.getScriptLock();
   try{
@@ -119,6 +119,29 @@ function forgotFinish(b){ const email=String(b.email||'').trim().toLowerCase(); 
   const u=find_('Users','email',email); if(!u) return {ok:false,error:'Account not found'};
   const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt),fails:0,lockUntil:''}); c.remove('otp:'+email);
   return me_(find_('Users','email',email),newSession_(email)); }
+
+/* ---------- Google sign-in ---------- */
+function normPhone_(v){ let p=String(v||'').replace(/[^0-9+]/g,''); if(/^0[6-9]\d{9}$/.test(p)) p=p.slice(1); if(/^[6-9]\d{9}$/.test(p)) return '+91'+p; if(/^91[6-9]\d{9}$/.test(p)) return '+'+p; return /^\+\d{10,15}$/.test(p)?p:''; }
+function googleAuth(b){
+  const cid=String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||'');
+  if(!cid) return {ok:false,error:'Google login is not switched on yet'};
+  const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(b.idToken||''),{muteHttpExceptions:true});
+  if(r.getResponseCode()!==200) return {ok:false,error:'Google sign-in failed. Please try again.'};
+  const t=JSON.parse(r.getContentText());
+  if(t.aud!==cid||String(t.email_verified)!=='true'||!/accounts\.google\.com$/.test(t.iss||'')) return {ok:false,error:'Google sign-in could not be verified'};
+  const email=String(t.email).toLowerCase(); let u=find_('Users','email',email), isNew=false;
+  if(!u){
+    const phone=normPhone_(b.phone); if(!phone) return {ok:true,needPhone:true};
+    const salt=rand_(24);
+    const nu={email,name:String(t.name||email.split('@')[0]).slice(0,60),salt,hash:sha_(rand_(64)),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:"'"+phone,dataKey:rand_(48),google:'yes'};
+    const trial=Number(setting_('trialDays',0)); if(trial>0){ nu.planId='trial'; nu.planName='Free trial'; nu.endDate=addDays_(today_(),trial); }
+    add_('Users',nu); isNew=true; u=find_('Users','email',email);
+  }
+  if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
+  const o={lastLogin:new Date().toISOString(),google:'yes'}; if(!u.dataKey) o.dataKey=rand_(48); if(!u.phone&&normPhone_(b.phone)) o.phone="'"+normPhone_(b.phone);
+  upd_('Users',u,o); u=find_('Users','email',email);
+  return Object.assign(me_(u,newSession_(email)),{dataKey:String(u.dataKey),isNew});
+}
 
 /* ---------- buying ---------- */
 function buy(b){
