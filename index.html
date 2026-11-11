@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CASHFLOW · Smart Money</title>
+<meta name="theme-color" content="#0f1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{--bg:#0f1220;--panel:#171b2e;--panel2:#1f2440;--text:#e8eaf6;--muted:#9aa0c3;--line:#2a3055;--accent:#6c7cff;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--radius:14px}
+body.light{--bg:#f3f5fb;--panel:#ffffff;--panel2:#eef1fa;--text:#1b1f36;--muted:#5d6488;--line:#dde2f0}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}body{font-family:Inter,Segoe UI,Roboto,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button{cursor:pointer;font:inherit}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.app{display:flex;min-height:100vh}
+.side{width:230px;background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;gap:4px;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
+.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--accent),#a855f7);display:grid;place-items:center;font-size:19px}
+.brand b{font-size:15px;display:block}.brand small{color:var(--muted);font-size:11px}
+.nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);border:none;background:none;width:100%;text-align:left}
+.nav:hover{background:var(--panel2);color:var(--text)}
+.nav.active{background:var(--accent);color:#fff}
+.nav .ic{width:20px;text-align:center}
+.side .grow{flex:1}
+main{margin-left:230px;flex:1;padding:22px 26px 90px;max-width:1400px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.top h1{font-size:22px}
+.top .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.btn{background:var(--accent);color:#fff;border:none;padding:9px 14px;border-radius:10px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.amber{background:var(--amber)}
+.btn.sm{padding:6px 10px;font-size:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h3{font-size:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.stat .lbl{color:var(--muted);font-size:12px}
+.stat .val{font-size:22px;font-weight:700;margin-top:6px}
+.stat .hint{font-size:11px;color:var(--muted);margin-top:4px}
+.pos{color:var(--green)}.neg{color:var(--red)}.warn{color:var(--amber)}
+.tile{background:var(--panel2);border-radius:12px;padding:12px;cursor:pointer;border:1px solid transparent}
+.tile:hover{border-color:var(--accent)}
+.tile .lbl{font-size:12px;color:var(--muted)}.tile .val{font-weight:700;font-size:17px;margin-top:4px}
+.acc{border-radius:var(--radius);padding:16px;color:#fff;position:relative;min-height:150px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.acc .t{font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.6px}
+.acc .n{font-size:16px;font-weight:700;margin-top:2px}
+.acc .b{font-size:22px;font-weight:800}
+.acc .m{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.acc .acts{position:absolute;top:10px;right:10px;display:flex;gap:4px}
+.acc .acts button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:4px 7px;font-size:12px}
+.bar{height:6px;background:rgba(255,255,255,.25);border-radius:6px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:#fff}
+.pbar{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden}
+.pbar i{display:block;height:100%}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+th{color:var(--muted);font-weight:600;font-size:12px}
+td.amt,th.amt{text-align:right;white-space:nowrap}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.tag.expense{background:rgba(239,68,68,.15);color:var(--red)}
+.tag.income{background:rgba(34,197,94,.15);color:var(--green)}
+.tag.transfer{background:rgba(108,124,255,.18);color:var(--accent)}
+.icon-btn{background:none;border:none;color:var(--muted);padding:3px 6px;border-radius:6px}
+.icon-btn:hover{background:var(--panel2);color:var(--text)}
+.due{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.due:last-child{border-bottom:none}
+.due .d1 b{display:block}.due .d1 small{color:var(--muted)}
+.pill{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.pill.over{background:rgba(239,68,68,.18);color:var(--red)}
+.pill.soon{background:rgba(245,158,11,.18);color:var(--amber)}
+.pill.ok{background:rgba(34,197,94,.18);color:var(--green)}
+.pill.later{background:var(--panel2);color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:26px 10px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+.modal-bg.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:100%;max-width:560px;max-height:92vh;overflow:auto;padding:20px}
+.modal h2{font-size:17px;margin-bottom:14px;display:flex;justify-content:space-between}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form .full{grid-column:1/-1}
+.tabs{display:flex;gap:6px;margin-bottom:14px;background:var(--panel2);padding:4px;border-radius:12px}
+.tabs button{flex:1;border:none;background:none;color:var(--muted);padding:8px;border-radius:9px;font-weight:600}
+.tabs button.on{background:var(--accent);color:#fff}
+.section{display:none}.section.on{display:block}
+.filters{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.groupttl{font-size:13px;color:var(--muted);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.6px;display:flex;justify-content:space-between}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 18px;border-radius:12px;z-index:99;display:none;font-weight:600}
+.lock-old{position:fixed;inset:0;background:var(--bg);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.lock input{max-width:220px;text-align:center;font-size:22px;letter-spacing:8px}
+pre.code{background:var(--panel2);padding:12px;border-radius:10px;overflow:auto;font-size:11.5px;max-height:300px;white-space:pre}
+.mobtop{display:none}
+.chartbox{position:relative;height:260px}
+@media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+.auth{position:fixed;inset:0;background:radial-gradient(circle at 20% 10%,#2b2f6b 0,var(--bg) 55%);z-index:100;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
+body.light .auth{background:radial-gradient(circle at 20% 10%,#dfe3ff 0,var(--bg) 55%)}
+#gateBtns{justify-content:center}
+.plan{display:flex;flex-direction:column;gap:10px;position:relative}.plan .pr{font-size:30px;font-weight:800}.plan .pr small{font-size:13px;color:var(--muted);font-weight:500}.plan ul{list-style:none;color:var(--muted);font-size:13px;line-height:1.8;flex:1}.plan.best{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}.plan .rib{position:absolute;top:-10px;right:14px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px}
+.banner{background:rgba(108,124,255,.15);border:1px solid var(--accent);color:var(--text);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+.subchip{font-size:11px;padding:6px 10px;border-radius:10px;background:var(--panel2);color:var(--muted);text-align:center;cursor:pointer}
+.auth .box{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:26px 22px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.auth .box h2{font-size:22px;text-align:center;margin:10px 0 2px}
+.auth .box p.s{text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px}
+.auth .f{margin-bottom:12px}
+.auth .btn{width:100%;justify-content:center;padding:12px}
+.auth .err{color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px;text-align:center}
+.auth .sec{font-size:11px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.6}
+.wordmark{font-weight:900;letter-spacing:2px}
+.userchip{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--panel2);font-size:12px}
+.userchip .av{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+.fab{display:none}
+.more{display:none}
+.mtop{display:none}
+@media(max-width:760px){
+.side{display:none}
+.mtop{display:flex;position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 14px;align-items:center;justify-content:space-between;padding-top:max(10px,env(safe-area-inset-top))}
+.mtop .wordmark{font-size:16px}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:flex;padding:6px 4px max(6px,env(safe-area-inset-bottom))}
+.bnav button{flex:1;border:none;background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;padding:4px 0;border-radius:10px}
+.bnav button .ic{font-size:19px}
+.bnav button.active{color:var(--accent)}
+.bnav .gap{flex:1}
+.fab{display:grid;place-items:center;position:fixed;bottom:calc(30px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#a855f7);color:#fff;font-size:30px;border:4px solid var(--bg);z-index:31;box-shadow:0 8px 20px rgba(108,124,255,.45)}
+.more{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;align-items:flex-end}
+.more.show{display:flex}
+.more .sheet{background:var(--panel);width:100%;border-radius:20px 20px 0 0;padding:14px 14px max(18px,env(safe-area-inset-bottom))}
+.more .sheet .grip{width:40px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 12px}
+.more .sheet .gridm{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.more .sheet .gridm button{background:var(--panel2);border:none;color:var(--text);border-radius:14px;padding:14px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px}
+.more .sheet .gridm button span{font-size:22px}
+main{margin-left:0;padding:12px 12px 110px;width:100%}
+.top .row{display:none}
+.top h1{font-size:19px}
+.g4,.g3{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}
+#v-accounts .grid.g3{grid-template-columns:1fr}
+.filters{grid-template-columns:1fr 1fr}
+.form{grid-template-columns:1fr}
+.hide-sm{display:none}
+.stat .val{font-size:17px}.card{padding:13px}
+.modal-bg{align-items:flex-end;padding:0}
+.modal{max-width:none!important;border-radius:20px 20px 0 0;max-height:90vh;padding-bottom:max(20px,env(safe-area-inset-bottom))}
+th,td{padding:9px 5px;font-size:12px}
+.chartbox{height:220px}
+.acc{min-height:140px}
+#planCards{grid-template-columns:1fr}
+#gate .card .row input{min-width:0}
+}
+@media(min-width:761px){.bnav,.fab{display:none}}
+</style>
+</head>
+<body>
+<div class="auth" id="auth">
+  <div class="box">
+    <div class="logo" style="width:56px;height:56px;font-size:26px;margin:0 auto">⚡</div>
+    <h2 class="wordmark" id="authApp">CASHFLOW</h2>
+    <p class="s">Smart money manager · Private & encrypted</p>
+    <div class="tabs" id="authTabs"><button data-a="login" class="on" onclick="authTab('login')">Login</button><button data-a="signup" onclick="authTab('signup')">Sign up</button></div>
+    <div id="authLogin">
+      <div class="f"><label>Email</label><input id="lUser" type="email" autocomplete="username" autocapitalize="none" placeholder="you@gmail.com"></div>
+      <div class="f"><label>Password</label><input id="lPass" type="password" autocomplete="current-password"></div>
+      <div class="err" id="lErr"></div>
+      <button class="btn" id="lBtn" onclick="doLogin()">Login</button>
+      <div style="text-align:center;margin-top:10px"><a href="#" style="color:var(--accent);font-size:12px" onclick="authTab('forgot');return false">Forgot password?</a></div>
+    </div>
+    <div id="authSignup" style="display:none">
+      <div class="f"><label>Full name</label><input id="sName" autocomplete="name"></div>
+      <div class="f"><label>Email (your Gmail works best)</label><input id="sUser" type="email" autocapitalize="none" autocomplete="username" placeholder="you@gmail.com"></div>
+      <div class="f"><label>Password (8+ characters with a number)</label><input id="sPass" type="password" autocomplete="new-password"></div>
+      <div class="f"><label>Confirm password</label><input id="sPass2" type="password" autocomplete="new-password"></div>
+      <div class="err" id="sErr"></div>
+      <button class="btn" id="sBtn" onclick="doSignup()">Create account</button>
+    </div>
+    <div id="authForgot" style="display:none">
+      <div class="f"><label>Email</label><input id="fEmail" type="email" autocapitalize="none"></div>
+      <button class="btn ghost" id="fSend" onclick="forgotSend()" style="margin-bottom:12px">Send code to my email</button>
+      <div class="f"><label>6-digit code</label><input id="fCode" inputmode="numeric" maxlength="6"></div>
+      <div class="f"><label>New password</label><input id="fPass" type="password" autocomplete="new-password"></div>
+      <div class="err" id="fErr"></div>
+      <button class="btn" id="fBtn" onclick="forgotDone()">Reset & login</button>
+      <div style="text-align:center;margin-top:10px"><a href="#" style="color:var(--accent);font-size:12px" onclick="authTab('login');return false">Back to login</a></div>
+    </div>
+    <div class="sec">🔐 Your money data is encrypted (AES-256) on your device and saved only to <b>your own</b> Google Drive.</div>
+    <div style="text-align:center;margin-top:10px"><button class="icon-btn" onclick="toggleTheme()">🌓 Theme</button></div>
+  </div>
+</div>
+
+<div class="auth" id="gate" style="display:none;align-items:flex-start">
+  <div style="width:100%;max-width:980px;margin:auto">
+    <div style="text-align:center;margin-bottom:18px"><div class="logo" style="width:52px;height:52px;font-size:24px;margin:0 auto">⚡</div>
+      <h2 class="wordmark" style="margin-top:10px" id="gateTitle">Choose your plan</h2><p style="color:var(--muted);margin-top:4px" id="gateSub"></p></div>
+    <div id="gateMsg"></div>
+    <div class="grid g3" id="planCards"></div>
+    <div class="card" style="max-width:520px;margin:18px auto 0">
+      <h3>🎫 Have an activation key?</h3>
+      <div class="row" style="flex-wrap:nowrap"><input id="actKey" placeholder="WR-XXXXX-XXXXX-XXXXX-XXXXX" autocapitalize="characters" style="font-family:monospace;letter-spacing:1px"><button class="btn" id="actBtn" onclick="activateKey()">Activate</button></div>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">The key is emailed to <b id="gateEmail"></b> after payment. It works only with this email.</p>
+    </div>
+    <div style="text-align:center;margin:16px 0 30px" class="row" id="gateBtns"><button class="btn ghost" id="gateClose" onclick="closeGate()" style="display:none">← Back to app</button><button class="btn ghost" onclick="refreshSub()">↻ Refresh status</button><button class="btn ghost" onclick="logout()">Logout</button></div>
+  </div>
+</div>
+
+<div class="mtop"><div class="row" style="gap:8px"><div class="logo" style="width:30px;height:30px;font-size:15px;border-radius:9px">⚡</div><span class="wordmark">CASHFLOW</span></div><button class="icon-btn" style="font-size:18px" onclick="toggleTheme()">🌓</button></div>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo">⚡</div><div><b id="brandName" class="wordmark">CASHFLOW</b><small>Smart Money · Secure</small></div></div>
+    <button class="nav active" data-v="dashboard"><span class="ic">📊</span>Dashboard</button>
+    <button class="nav" data-v="accounts"><span class="ic">🏦</span>Accounts</button>
+    <button class="nav" data-v="transactions"><span class="ic">🧾</span>Transactions</button>
+    <button class="nav" data-v="dues"><span class="ic">⏰</span>Dues & EMIs</button>
+    <button class="nav" data-v="reports"><span class="ic">📈</span>Reports</button>
+    <button class="nav" data-v="backup"><span class="ic">☁️</span>Google Sheet</button>
+    <button class="nav" data-v="settings"><span class="ic">⚙️</span>Settings</button>
+    <div class="grow"></div>
+    <div class="subchip" id="subChip" onclick="openGate(true)"></div>
+    <div class="userchip" id="userChip"></div>
+    <button class="nav hide-m" onclick="toggleTheme()"><span class="ic">🌓</span>Theme</button>
+    <button class="nav hide-m" onclick="logout()"><span class="ic">🚪</span>Logout</button>
+  </aside>
+
+  <main>
+    <div class="top">
+      <div><h1 id="vTitle">Dashboard</h1><div class="sub" id="vSub"></div></div>
+      <div class="row">
+        <button class="btn red" onclick="openTxn('expense')">− Expense</button>
+        <button class="btn green" onclick="openTxn('income')">+ Income</button>
+        <button class="btn" onclick="openTxn('transfer')">⇄ Transfer</button>
+      </div>
+    </div>
+
+    <div class="banner" id="annBanner" style="display:none"></div>
+    <!-- DASHBOARD -->
+    <section class="section on" id="v-dashboard">
+      <div class="grid g4" id="dashStats"></div>
+      <div class="grid g4" id="dashTiles" style="margin-top:14px"></div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card"><h3>⏰ Upcoming dues (30 days) <button class="btn ghost sm" onclick="go('dues')">All</button></h3><div id="dashDues"></div></div>
+        <div class="card"><h3>This month's spending by category</h3><div class="chartbox"><canvas id="chCatDash"></canvas></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>Recent transactions <button class="btn ghost sm" onclick="go('transactions')">View all</button></h3><div id="dashRecent"></div></div>
+    </section>
+
+    <!-- ACCOUNTS -->
+    <section class="section" id="v-accounts">
+      <div class="row" style="justify-content:space-between">
+        <div class="row"><select id="accFilter" style="width:auto" onchange="renderAccounts()"><option value="">All types</option></select></div>
+        <button class="btn" onclick="openAcc()">+ Add Account</button>
+      </div>
+      <div id="accList"></div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section class="section" id="v-transactions">
+      <div class="filters">
+        <input id="fSearch" placeholder="Search note / category" oninput="renderTxns()">
+        <select id="fType" onchange="renderTxns()"><option value="">All types</option><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option></select>
+        <select id="fAcc" onchange="renderTxns()"></select>
+        <input type="month" id="fMonth" onchange="renderTxns()">
+        <button class="btn ghost" onclick="clearFilters()">Clear filters</button>
+      </div>
+      <div class="grid g3" id="txnSummary" style="margin-bottom:12px"></div>
+      <div class="card" style="overflow:auto"><div id="txnTable"></div></div>
+    </section>
+
+    <!-- DUES -->
+    <section class="section" id="v-dues">
+      <div class="grid g3" id="dueStats"></div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card"><h3>💳 Credit card bills</h3><div id="dueCards"></div></div>
+        <div class="card"><h3>🏠 Loan EMIs</h3><div id="dueLoans"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>📅 Investment maturities</h3><div id="dueInv"></div></div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="section" id="v-reports">
+      <div class="row" style="margin-bottom:12px"><label style="margin:0">Month</label><input type="month" id="rMonth" style="width:auto" onchange="renderReports()"><button class="btn ghost sm" onclick="exportCSV()">⬇ Export CSV</button></div>
+      <div class="grid g2">
+        <div class="card"><h3>Income vs Expense (last 6 months)</h3><div class="chartbox"><canvas id="chMonthly"></canvas></div></div>
+        <div class="card"><h3>Spending by category</h3><div class="chartbox"><canvas id="chCat"></canvas></div></div>
+        <div class="card"><h3>Asset allocation</h3><div class="chartbox"><canvas id="chAlloc"></canvas></div></div>
+        <div class="card"><h3>Credit card utilization</h3><div id="utilList"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>Account-wise summary (selected month)</h3><div id="accSummary" style="overflow:auto"></div></div>
+    </section>
+
+    <!-- BACKUP -->
+    <section class="section" id="v-backup">
+      <div class="card" id="gCard" style="margin-bottom:14px">
+        <h3>📗 Your Google Sheet <span id="gBadge" class="pill later">Not linked</span></h3>
+        <p style="color:var(--muted);margin-bottom:12px" id="gInfo">Sign in with your own Google account. CASHFLOW creates a private sheet named "CASHFLOW Data" in <b>your</b> Google Drive and saves every change there automatically, plus a daily backup file in the "CASHFLOW Backups" folder (last 30 days kept). Nobody else can see it.</p>
+        <div class="row">
+          <button class="btn" onclick="connectGoogle()">🔗 Connect Google</button>
+          <button class="btn green" onclick="gPush(true)">⬆ Save to Sheet now</button>
+          <button class="btn amber" onclick="gPullAsk()">⬇ Load from Sheet</button>
+          <a class="btn ghost" id="gOpen" target="_blank" rel="noopener" style="display:none;text-decoration:none">Open my Sheet ↗</a>
+          <button class="btn ghost" onclick="gBackup(true)">🗂 Backup now</button>
+          <button class="btn ghost" onclick="gUnlink()">Unlink</button>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>💾 Local backup</h3>
+          <p style="color:var(--muted);margin-bottom:12px">Your data is saved in this browser. Take a backup file regularly so nothing is lost.</p>
+          <div class="row">
+            <button class="btn" onclick="exportJSON()">⬇ Download backup (JSON)</button>
+            <button class="btn ghost" onclick="document.getElementById('impFile').click()">⬆ Restore backup</button>
+            <button class="btn ghost" onclick="exportCSV()">⬇ Transactions CSV (Excel)</button>
+            <input type="file" id="impFile" accept=".json" style="display:none" onchange="importJSON(event)">
+          </div>
+        </div>
+        <div class="card">
+          <h3>🛠 Advanced: link via Apps Script</h3>
+          <p style="color:var(--muted);margin-bottom:10px">Every user links <b>their own</b> Google Sheet. Your accounts and transactions appear there as tables, and the same data opens on phone and PC.</p>
+          <div class="form">
+            <div class="full"><label>Apps Script Web App URL</label><input id="syncUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+            <div><label>Secret key (same as in script)</label><input id="syncKey" type="password"></div>
+            <div><label>Auto-sync on every change</label><select id="syncAuto"><option value="1">On</option><option value="0">Off</option></select></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" onclick="saveSync()">Save</button>
+            <button class="btn green" onclick="pushCloud(true)">⬆ Sync to Sheet now</button>
+            <button class="btn amber" onclick="pullCloud()">⬇ Download from Sheet</button>
+          </div>
+          <div id="syncStatus" style="margin-top:10px;color:var(--muted);font-size:12px"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Apps Script setup code <button class="btn ghost sm" onclick="copyCode()">Copy code</button></h3>
+        <ol style="color:var(--muted);margin:0 0 10px 18px;line-height:1.8">
+          <li>Create a new Google Sheet (sheets.new) → Extensions → Apps Script → delete old code, paste the code below.</li>
+          <li>Change <b>MY_SECRET_KEY</b> to your own password.</li>
+          <li>Deploy → New deployment → Web app → Execute as: Me → Who has access: Anyone.</li>
+          <li>Copy the Web App URL and paste it above with the same secret key.</li>
+        </ol>
+        <pre class="code" id="gsCode"></pre>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="section" id="v-settings">
+      <div class="grid g2">
+        <div class="card">
+          <h3>👤 General</h3>
+          <div class="form">
+            <div class="full"><label>Your display name</label><input id="setName"></div>
+            <div><label>Theme</label><select id="setTheme"><option value="dark">Dark</option><option value="light">Light</option></select></div>
+            <div><label>Currency symbol</label><input id="setCur" maxlength="3"></div>
+          </div>
+          <button class="btn" style="margin-top:12px" onclick="saveSettings()">Save settings</button>
+        </div>
+        <div class="card">
+          <h3>🔐 Security</h3>
+          <div class="form">
+            <div><label>Current password</label><input id="cpOld" type="password"></div>
+            <div><label>New password</label><input id="cpNew" type="password"></div>
+            <div><label>Auto-lock after inactivity</label><select id="setLock"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="0">Never</option></select></div>
+          </div>
+          <div class="row" style="margin-top:12px"><button class="btn" onclick="changePass()">Change password</button><button class="btn ghost" onclick="saveLock()">Save auto-lock</button></div>
+          <p style="color:var(--muted);font-size:12px;margin-top:10px">If you reset a forgotten password, data on this device is re-loaded from your Google Sheet, so keep it linked.</p>
+        </div>
+        <div class="card">
+          <h3>🎫 Subscription</h3>
+          <div id="licInfo" style="line-height:1.9"></div>
+          <div class="row" style="margin-top:10px"><button class="btn" onclick="openGate(true)">Renew / upgrade</button><button class="btn ghost" onclick="refreshSub()">↻ Refresh</button></div>
+        </div>
+        <div class="card">
+          <h3>🏷️ Categories</h3>
+          <div class="form">
+            <div class="full"><label>Expense categories (comma separated)</label><textarea id="setExpCat" rows="4"></textarea></div>
+            <div class="full"><label>Income categories (comma separated)</label><textarea id="setIncCat" rows="2"></textarea></div>
+          </div>
+          <button class="btn" style="margin-top:12px" onclick="saveCats()">Save categories</button>
+        </div>
+        <div class="card">
+          <h3>⚠️ Danger zone</h3>
+          <p style="color:var(--muted);margin-bottom:12px">Delete everything stored in this browser. Download a backup first.</p>
+          <div class="row"><button class="btn ghost" onclick="loadDemo()">Load demo data</button><button class="btn red" onclick="wipeAll()">Delete ALL data</button><button class="btn red" onclick="deleteMe()">Remove from this device</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="bnav">
+  <button data-v="dashboard" onclick="go('dashboard')"><span class="ic">📊</span>Home</button>
+  <button data-v="accounts" onclick="go('accounts')"><span class="ic">🏦</span>Accounts</button>
+  <span class="gap"></span>
+  <button data-v="dues" onclick="go('dues')"><span class="ic">⏰</span>Dues</button>
+  <button data-v="more" onclick="$('more').classList.add('show')"><span class="ic">☰</span>More</button>
+</nav>
+<button class="fab" onclick="$('quick').classList.add('show')">+</button>
+<div class="more" id="quick" onclick="if(event.target===this)this.classList.remove('show')"><div class="sheet"><div class="grip"></div>
+  <div class="gridm">
+   <button onclick="$('quick').classList.remove('show');openTxn('expense')"><span>➖</span>Expense</button>
+   <button onclick="$('quick').classList.remove('show');openTxn('income')"><span>➕</span>Income</button>
+   <button onclick="$('quick').classList.remove('show');openTxn('transfer')"><span>⇄</span>Transfer / Pay</button>
+  </div></div></div>
+<div class="more" id="more" onclick="if(event.target===this)this.classList.remove('show')"><div class="sheet"><div class="grip"></div>
+  <div class="gridm">
+   <button onclick="mgo('transactions')"><span>🧾</span>Transactions</button>
+   <button onclick="mgo('reports')"><span>📈</span>Reports</button>
+   <button onclick="mgo('backup')"><span>📗</span>Google Sheet</button>
+   <button onclick="mgo('settings')"><span>⚙️</span>Settings</button>
+   <button onclick="$('more').classList.remove('show');toggleTheme()"><span>🌓</span>Theme</button>
+   <button onclick="$('more').classList.remove('show');logout()"><span>🚪</span>Logout</button>
+  </div></div></div>
+
+<!-- ACCOUNT MODAL -->
+<div class="modal-bg" id="mAcc"><div class="modal">
+  <h2><span id="accTitle">Add Account</span><button class="icon-btn" onclick="closeM('mAcc')">✕</button></h2>
+  <input type="hidden" id="aId">
+  <div class="form">
+    <div><label>Account type *</label><select id="aType" onchange="accFields()"></select></div>
+    <div><label>Account name *</label><input id="aName" placeholder="e.g. HDFC Savings"></div>
+    <div data-for="bank credit loan invest wallet"><label>Bank / Company</label><input id="aBank" placeholder="e.g. HDFC Bank"></div>
+    <div data-for="bank credit"><label>Last 4 digits</label><input id="aLast4" maxlength="4"></div>
+    <div data-for="invest"><label>Investment type</label><select id="aInvType"></select></div>
+    <div><label id="aOpenLbl">Opening balance (₹)</label><input id="aOpen" type="number" step="0.01" value="0"></div>
+    <div data-for="credit"><label>Credit limit (₹)</label><input id="aLimit" type="number" step="0.01"></div>
+    <div data-for="credit"><label>Statement day (1–31)</label><input id="aStmt" type="number" min="1" max="31"></div>
+    <div data-for="credit"><label>Due day (1–31)</label><input id="aDue" type="number" min="1" max="31"></div>
+    <div data-for="loan"><label>Loan type</label><select id="aLoanType"><option>Home Loan</option><option>Car Loan</option><option>Personal Loan</option><option>Business Loan</option><option>Education Loan</option><option>Gold Loan</option><option>Loan against Property</option><option>Credit Card EMI</option><option>Borrowed from person</option><option>Other</option></select></div>
+    <div data-for="loan"><label>Original loan amount (₹)</label><input id="aPrincipal" type="number" step="0.01"></div>
+    <div data-for="loan"><label>EMI amount (₹)</label><input id="aEmi" type="number" step="0.01"></div>
+    <div data-for="loan"><label>EMI day (1–31)</label><input id="aEmiDay" type="number" min="1" max="31"></div>
+    <div data-for="loan"><label>Tenure (months)</label><input id="aTenure" type="number"></div>
+    <div data-for="loan"><label>Last EMI date</label><input id="aEnd" type="date"></div>
+    <div data-for="loan invest"><label>Interest rate (% p.a.)</label><input id="aRate" type="number" step="0.01"></div>
+    <div data-for="invest"><label>Maturity date</label><input id="aMature" type="date"></div>
+    <div data-for="bank"><label>IFSC</label><input id="aIfsc"></div>
+    <div><label>Card colour</label><input id="aColor" type="color" value="#6c7cff" style="height:40px;padding:4px"></div>
+    <div class="full"><label>Notes</label><input id="aNotes"></div>
+  </div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn ghost" onclick="closeM('mAcc')">Cancel</button><button class="btn" onclick="saveAcc()">Save account</button></div>
+</div></div>
+
+<!-- TXN MODAL -->
+<div class="modal-bg" id="mTxn"><div class="modal">
+  <h2><span id="txnTitle">Add Transaction</span><button class="icon-btn" onclick="closeM('mTxn')">✕</button></h2>
+  <input type="hidden" id="tId">
+  <div class="tabs" id="tTabs">
+    <button data-t="expense" onclick="setTType('expense')">− Expense</button>
+    <button data-t="income" onclick="setTType('income')">+ Income</button>
+    <button data-t="transfer" onclick="setTType('transfer')">⇄ Transfer / Pay</button>
+  </div>
+  <div class="form">
+    <div><label>Amount (₹) *</label><input id="tAmt" type="number" step="0.01"></div>
+    <div><label>Date *</label><input id="tDate" type="date"></div>
+    <div class="tx-single full"><label id="tAccLbl">Account *</label><select id="tAcc"></select></div>
+    <div class="tx-transfer"><label>From account *</label><select id="tFrom"></select></div>
+    <div class="tx-transfer"><label>To account *</label><select id="tTo"></select></div>
+    <div class="tx-single"><label>Category</label><select id="tCat"></select></div>
+    <div><label>Mode</label><select id="tMode"><option>UPI</option><option>Cash</option><option>Card</option><option>Net Banking</option><option>NEFT/RTGS/IMPS</option><option>Cheque</option><option>Auto-debit</option><option>Other</option></select></div>
+    <div class="tx-transfer"><label>Purpose</label><select id="tPurpose"><option>Self transfer</option><option>Credit card bill</option><option>Loan EMI</option><option>Investment / SIP</option><option>Cash withdrawal</option><option>Cash deposit</option><option>Locker deposit</option><option>Locker withdrawal</option><option>Wallet top-up</option><option>Loan disbursal</option><option>Other</option></select></div>
+    <div class="full"><label>Note</label><input id="tNote" placeholder="e.g. Grocery from DMart"></div>
+  </div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn ghost" onclick="closeM('mTxn')">Cancel</button><button class="btn" onclick="saveTxn()">Save</button></div>
+</div></div>
+
+<!-- VALUE MODAL -->
+<div class="modal-bg" id="mVal"><div class="modal" style="max-width:400px">
+  <h2>Update balance / value<button class="icon-btn" onclick="closeM('mVal')">✕</button></h2>
+  <input type="hidden" id="vId">
+  <p style="color:var(--muted);margin-bottom:10px" id="vInfo"></p>
+  <label>Actual current value (₹)</label><input id="vAmt" type="number" step="0.01">
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn ghost" onclick="closeM('mVal')">Cancel</button><button class="btn" onclick="saveVal()">Update</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= CONFIG (seller edits this) =================
+   API_URL          : your CASHFLOW server (Apps Script Web App URL)
+   GOOGLE_CLIENT_ID : OAuth Web Client ID (one-click Google Sheet for every user)   */
+const API_URL = '';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
+const GOOGLE_CLIENT_ID = '';
+const APP_VERSION = '3.0';
+/* ================= DATA ================= */
+const KEY='agac_money_v1';
+const TYPES={
+  bank:{l:'Bank Account',ic:'🏦',asset:true,open:'Current balance (₹)',c:'#2563eb'},
+  cash:{l:'Cash Wallet',ic:'👛',asset:true,open:'Cash in hand (₹)',c:'#16a34a'},
+  locker:{l:'Locker Cash',ic:'🔒',asset:true,open:'Cash in locker (₹)',c:'#a16207'},
+  wallet:{l:'Digital Wallet',ic:'📱',asset:true,open:'Wallet balance (₹)',c:'#0891b2'},
+  invest:{l:'Investment',ic:'📈',asset:true,open:'Current value (₹)',c:'#7c3aed'},
+  other:{l:'Other Asset / Receivable',ic:'💼',asset:true,open:'Current value (₹)',c:'#475569'},
+  credit:{l:'Credit Card',ic:'💳',asset:false,open:'Current outstanding (₹)',c:'#db2777'},
+  loan:{l:'Loan',ic:'🏠',asset:false,open:'Outstanding principal (₹)',c:'#dc2626'}
+};
+const INV_TYPES=['Fixed Deposit','Recurring Deposit','Mutual Fund / SIP','Stocks','Gold / SGB','PPF','EPF','NPS','Insurance (ULIP/LIC)','Bonds','Crypto','Real Estate','Chit Fund','Other'];
+const DEF_EXP=['Food & Dining','Groceries','Fuel','Travel','Shopping','Bills & Utilities','Rent','Mobile & Internet','Medical','Education','Entertainment','Office / Business','GST / Taxes','Salary paid','Personal care','Gifts','Bank charges','Interest paid','Household','Other'];
+const DEF_INC=['Salary','Business income','Interest','Dividend','Rent received','Refund / Cashback','Gift received','Other'];
+
+let S=null;let SES=null; // SES={user,key}
+function blank(){return{accounts:[],txns:[],cats:{expense:DEF_EXP.slice(),income:DEF_INC.slice()},settings:{name:'',theme:localStorage.getItem('wr_theme')||'dark',cur:'₹',syncUrl:'',syncKey:'',syncAuto:'1',lockMin:'10'},updated:Date.now()}}
+function normalize(d){const b=blank();d=d&&d.accounts?d:b;d.txns=d.txns||[];d.cats=d.cats||b.cats;d.settings=Object.assign(b.settings,d.settings||{});return d}
+/* ---- crypto ---- */
+const te=new TextEncoder(),td=new TextDecoder();
+const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u)));
+const ub64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+async function pbk(pw,salt,usage){const base=await crypto.subtle.importKey('raw',te.encode(pw),'PBKDF2',false,['deriveBits','deriveKey']);
+  if(usage==='bits')return b64(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,256));
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function encObj(key,obj){const iv=rnd(12);const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,te.encode(JSON.stringify(obj)));return{iv:b64(iv),ct:b64(ct)}}
+async function decObj(key,e){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub64(e.iv)},key,ub64(e.ct));return JSON.parse(td.decode(pt))}
+const USERS='wr_users';
+const getUsers=()=>{try{return JSON.parse(localStorage.getItem(USERS))||{}}catch(e){return{}}};
+const setUsers=u=>localStorage.setItem(USERS,JSON.stringify(u));
+const dataKey=u=>'wr_data_'+u;
+let saveQ=Promise.resolve(),syncTimer=null;
+function save(skipSync){if(!S||!SES)return;S.updated=Date.now();const snap=JSON.parse(JSON.stringify(S));const ses=SES;
+  saveQ=saveQ.then(async()=>{const e=await encObj(ses.key,snap);localStorage.setItem(dataKey(ses.user),JSON.stringify(e))}).catch(()=>toast('Save failed'));
+  if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),1500)}
+  else if(!skipSync&&S.settings.syncUrl&&S.settings.syncAuto==='1'){clearTimeout(syncTimer);syncTimer=setTimeout(()=>pushCloud(false),1500)}}
+/* ---- server ---- */
+let CFG={plans:[],appName:'CASHFLOW',announcement:'',supportEmail:'',supportPhone:''},ME=null;
+async function api(action,data){
+  if(!API_URL)throw new Error('Server is not set up yet (API_URL)');
+  const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({action},data||{}))});
+  const j=await r.json();if(j.relogin&&S){toast('Session expired, please login again');logout()}return j}
+async function sha256hex(t){return[...new Uint8Array(await crypto.subtle.digest('SHA-256',te.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('')}
+const pwHash=(email,pw)=>sha256hex('workrow|'+email+'|'+pw);
+function applyCfg(c){if(!c)return;['plans','appName','announcement','supportEmail','supportPhone','auto'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
+const subActive=sub=>!!(sub&&sub.endDate&&sub.endDate>=today()&&!sub.blocked);
+/* ---- auth ---- */
+function authTab(t){document.querySelectorAll('#authTabs button').forEach(b=>b.classList.toggle('on',b.dataset.a===t));$('authLogin').style.display=t==='login'?'':'none';$('authSignup').style.display=t==='signup'?'':'none';$('authForgot').style.display=t==='forgot'?'':'none';$('lErr').textContent=$('sErr').textContent=$('fErr').textContent=''}
+const strong=p=>p.length>=8&&/\d/.test(p)&&/[a-zA-Z]/.test(p);
+async function openLocal(email,pw,me,fresh){
+  const U=getUsers();let rec=U[email];
+  if(!rec||fresh){rec={ks:b64(rnd(16)),as:b64(rnd(16))};}
+  rec.auth=await pbk(pw,ub64(rec.as),'bits');rec.name=me.name;rec.sub=me.sub;rec.checked=Date.now();U[email]=rec;setUsers(U);
+  const key=await pbk(pw,ub64(rec.ks),'key');const raw=fresh?null:localStorage.getItem(dataKey(email));
+  let data=null;if(raw){try{data=await decObj(key,JSON.parse(raw))}catch(e){if(!confirm('Data on this device was locked with an older password.\n\nOK = clear it here and load from your Google Sheet'))throw new Error('Could not open local data');rec.ks=b64(rnd(16));setUsers(U);return openLocal(email,pw,me,true)}}
+  SES={user:email,key:await pbk(pw,ub64(rec.ks),'key'),token:me.token};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;save(true);
+}
+async function afterAuth(me,email,pw,fresh){
+  applyCfg(me);await openLocal(email,pw,me,fresh);startApp();
+  if(!subActive(me.sub))openGate(false);
+  handleReturn();
+  if(!S.accounts.length&&!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
+}
+async function doSignup(){
+  const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value;const E=m=>$('sErr').textContent=m;
+  if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');
+  if(!strong(p))return E('Password needs 8+ characters with letters and a number');if(p!==p2)return E('Passwords do not match');
+  $('sBtn').disabled=true;$('sBtn').textContent='Creating…';
+  try{const me=await api('signup',{name,email,pwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Welcome, '+name.split(' ')[0]+'!')}
+  catch(e){E(e.message.includes('fetch')?'No internet connection':e.message)}finally{$('sBtn').disabled=false;$('sBtn').textContent='Create account';$('sPass').value=$('sPass2').value=''}
+}
+async function doLogin(){
+  const email=$('lUser').value.trim().toLowerCase(),p=$('lPass').value;const E=m=>$('lErr').textContent=m;
+  if(!email||!p)return E('Enter email and password');
+  $('lBtn').disabled=true;$('lBtn').textContent='Checking…';
+  try{let me;try{me=await api('login',{email,pwh:await pwHash(email,p)})}
+    catch(net){// offline: allow only if this device knows the user and plan is still valid
+      const rec=getUsers()[email];if(rec&&rec.auth&&await pbk(p,ub64(rec.as),'bits')===rec.auth&&subActive(rec.sub)&&Date.now()-rec.checked<7*864e5){me={ok:true,offline:true,name:rec.name,sub:rec.sub,token:''}}else return E('No internet connection')}
+    if(!me.ok)return E(me.error);await afterAuth(me,email,p,false);if(me.offline)toast('Offline mode · changes sync when you are back online')}
+  catch(e){E(e.message)}finally{$('lBtn').disabled=false;$('lBtn').textContent='Login';$('lPass').value=''}
+}
+async function forgotSend(){const e=$('fEmail').value.trim().toLowerCase();if(!e)return $('fErr').textContent='Enter your email';$('fSend').disabled=true;try{await api('forgotStart',{email:e});$('fErr').textContent='';toast('If this email is registered, a code was sent')}catch(x){$('fErr').textContent='No internet connection'}finally{setTimeout(()=>$('fSend').disabled=false,30000)}}
+async function forgotDone(){const email=$('fEmail').value.trim().toLowerCase(),code=$('fCode').value.trim(),p=$('fPass').value;const E=m=>$('fErr').textContent=m;
+  if(!strong(p))return E('Password needs 8+ characters with letters and a number');$('fBtn').disabled=true;
+  try{const me=await api('forgotFinish',{email,code,newPwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Password reset ✓ Load your data from Google Sheet')}catch(x){E(x.message)}finally{$('fBtn').disabled=false;$('fPass').value=''}}
+/* ---- subscription gate ---- */
+function openGate(canClose){
+  const me=ME||{};const sub=me.sub||{};const act=subActive(sub);
+  $('gateEmail').textContent=SES?SES.user:'';
+  $('gateTitle').textContent=act?'Renew or upgrade':(sub.endDate?'Your plan has ended':'Choose your plan');
+  $('gateSub').textContent=act?'Current plan: '+sub.planName+' · valid till '+dfmt(sub.endDate):(sub.blocked?'Your account is blocked. Contact support.':'Buy a plan to start using '+(CFG.appName||'CASHFLOW')+'.');
+  const ps=CFG.plans||[];const best=ps.length>2?1:-1;
+  $('planCards').innerHTML=ps.length?ps.map((p,i)=>`<div class="card plan ${i===best?'best':''}">${i===best?'<span class="rib">POPULAR</span>':''}<b style="font-size:16px">${esc(p.name)}</b><div class="pr">₹${Number(p.price).toLocaleString('en-IN')} <small>/ ${p.days} days</small></div><ul>${String(p.features||'').split(/[·\n|]/).map(f=>f.trim()).filter(Boolean).map(f=>'<li>✓ '+esc(f)+'</li>').join('')}</ul><button class="btn" style="justify-content:center" onclick="buyPlan('${esc(p.id)}',this)">Buy ${esc(p.name)}</button></div>`).join(''):'<div class="card empty">Plans are not available right now. Please contact support.</div>';
+  $('gateClose').style.display=canClose&&act?'':'none';$('gate').style.display='flex';
+  const sup=[CFG.supportEmail,CFG.supportPhone].filter(Boolean).join(' · ');$('gateMsg').innerHTML=sup?`<p style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:12px">Help: ${esc(sup)}</p>`:'';
+}
+function closeGate(){if(subActive(ME&&ME.sub))$('gate').style.display='none'}
+async function buyPlan(id,btn){
+  btn.disabled=true;btn.textContent='Please wait…';
+  try{const r=await api('buy',{token:SES.token,planId:id,returnUrl:location.origin+location.pathname});if(!r.ok)return toast(r.error);
+    sessionStorage.setItem('wr_order',JSON.stringify({orderId:r.orderId,mode:r.mode,email:SES.user}));
+    if(r.mode==='razorpay'){location.href=r.payUrl;return}
+    window.open(r.payUrl,'_blank','noopener');
+    $('gateMsg').innerHTML=`<div class="banner">After paying, your activation key will be emailed to <b>${esc(SES.user)}</b> once the payment is confirmed (order ${esc(r.orderId)}). Then enter it below.</div>`}
+  catch(e){toast('No internet connection')}finally{btn.disabled=false;btn.textContent='Buy again'}
+}
+async function handleReturn(){
+  const q=new URLSearchParams(location.search);const link=q.get('razorpay_payment_link_id');if(!link)return;
+  history.replaceState(null,'',location.pathname);
+  if(q.get('razorpay_payment_link_status')!=='paid'){toast('Payment was not completed');return}
+  openGate(true);$('gateMsg').innerHTML='<div class="banner">⏳ Confirming your payment…</div>';
+  try{const r=await api('confirmLink',{token:SES.token,linkId:link});
+    $('gateMsg').innerHTML=r.ok&&r.paid?`<div class="banner">✅ Payment confirmed! Your activation key has been sent to <b>${esc(SES.user)}</b>. Check your inbox (and spam), then enter it below.</div>`:'<div class="banner">Payment is being verified. Your key will reach your email within a few minutes.</div>'}
+  catch(e){$('gateMsg').innerHTML='<div class="banner">Your key will reach your email within a few minutes.</div>'}
+}
+async function activateKey(){
+  const k=$('actKey').value.trim();if(!k)return toast('Enter your activation key');$('actBtn').disabled=true;
+  try{const me=await api('activate',{token:SES.token,key:k});if(!me.ok)return toast(me.error);setMe(me);$('actKey').value='';$('gate').style.display='none';toast('🎉 '+me.sub.planName+' active till '+dfmt(me.sub.endDate));render()}
+  catch(e){toast('No internet connection')}finally{$('actBtn').disabled=false}
+}
+function setMe(me){ME=Object.assign(ME||{},me);applyCfg(me);const U=getUsers();if(U[SES.user]){U[SES.user].sub=me.sub;U[SES.user].checked=Date.now();setUsers(U)}renderSub()}
+async function refreshSub(){if(!SES||!SES.token)return;try{const me=await api('status',{token:SES.token});if(!me.ok)return;setMe(me);if(!subActive(me.sub))openGate(false);else if($('gate').style.display!=='none'&&!$('gateClose').offsetParent)$('gate').style.display='none'}catch(e){}}
+setInterval(()=>{if(S)refreshSub()},30*60000);
+function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)return;
+  if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
+  if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
+function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
+function logout(){clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
+['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
+async function changePass(){
+  const o=$('cpOld').value,n=$('cpNew').value;if(!strong(n))return toast('New password: 8+ characters with letters and a number');
+  try{const r=await api('changePassword',{token:SES.token,oldPwh:await pwHash(SES.user,o),newPwh:await pwHash(SES.user,n)});if(!r.ok)return toast(r.error);
+    const U=getUsers(),rec=U[SES.user];rec.as=b64(rnd(16));rec.ks=b64(rnd(16));rec.auth=await pbk(n,ub64(rec.as),'bits');SES.key=await pbk(n,ub64(rec.ks),'key');setUsers(U);save(true);$('cpOld').value=$('cpNew').value='';toast('Password changed')}
+  catch(e){toast('No internet connection')}}
+function saveLock(){S.settings.lockMin=$('setLock').value;save(true);armLock();toast('Auto-lock saved')}
+function deleteMe(){if(!confirm('Delete your CASHFLOW login and all its data from this device? Your Google Sheet is not touched.'))return;if(!confirm('Final confirmation: remove "'+SES.user+'" from this device?'))return;const U=getUsers();delete U[SES.user];setUsers(U);localStorage.removeItem(dataKey(SES.user));logout();toast('Removed from this device')}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
+function fmt(n){const neg=n<0;n=Math.abs(n||0);return(neg?'-':'')+(S.settings.cur||'₹')+n.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:2})}
+function today(){const d=new Date();return iso(d)}
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function pd(s){const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)}
+function dfmt(s){if(!s)return'';return pd(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
+function dayIn(y,m,d){const last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(d,last))}
+function daysBetween(a,b){return Math.round((b-a)/86400000)}
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2200)}
+const acc=id=>S.accounts.find(a=>a.id===id);
+const accName=id=>{const a=acc(id);return a?a.name:'(deleted)'};
+const isAsset=a=>TYPES[a.type]?.asset;
+
+/* Balance: assets = money you have; liabilities (credit/loan) = amount you owe */
+function balance(a,upto){
+  let b=num(a.opening);const L=!isAsset(a);
+  for(const t of S.txns){
+    if(upto&&t.date>upto)continue;const v=num(t.amount);
+    if(t.type==='expense'&&t.account===a.id)b+=L?v:-v;
+    else if(t.type==='income'&&t.account===a.id)b+=L?-v:v;
+    else if(t.type==='transfer'){
+      if(t.from===a.id)b+=L?v:-v;
+      if(t.to===a.id)b+=L?-v:v;
+    }
+  }
+  return b+num(a.adj);
+}
+function totals(){
+  const g={};let assets=0,liab=0;
+  for(const a of S.accounts){if(a.archived)continue;const b=balance(a);g[a.type]=(g[a.type]||0)+b;if(isAsset(a))assets+=b;else liab+=b}
+  return{g,assets,liab,net:assets-liab}
+}
+function monthStats(ym){
+  let inc=0,exp=0;const cat={};
+  for(const t of S.txns){if(!t.date.startsWith(ym))continue;
+    if(t.type==='income')inc+=num(t.amount);
+    if(t.type==='expense'){exp+=num(t.amount);cat[t.category||'Other']=(cat[t.category||'Other']||0)+num(t.amount)}}
+  return{inc,exp,cat}
+}
+
+/* ================= DUES ================= */
+function cardDue(a){
+  const now=new Date();now.setHours(0,0,0,0);
+  if(!a.dueDay)return null;
+  const out=balance(a);
+  if(!a.stmtDay){let due=dayIn(now.getFullYear(),now.getMonth(),+a.dueDay);if(due<now&&out<=0)due=dayIn(now.getFullYear(),now.getMonth()+1,+a.dueDay);const days=daysBetween(now,due);return{acc:a,amount:Math.max(out,0),due,days,stmt:null,status:out<=0?'ok':days<0?'over':days<=5?'soon':'later',kind:'card'}}
+  // last statement date on or before today
+  let ls=dayIn(now.getFullYear(),now.getMonth(),+a.stmtDay);if(ls>now)ls=dayIn(now.getFullYear(),now.getMonth()-1,+a.stmtDay);
+  let due=dayIn(ls.getFullYear(),ls.getMonth(),+a.dueDay);if(due<=ls)due=dayIn(ls.getFullYear(),ls.getMonth()+1,+a.dueDay);
+  const lsIso=iso(ls);const stmtBal=balance(a,lsIso);
+  const paid=S.txns.filter(t=>t.date>lsIso&&((t.type==='transfer'&&t.to===a.id)||(t.type==='income'&&t.account===a.id))).reduce((s,t)=>s+num(t.amount),0);
+  let amount=Math.max(0,stmtBal-paid);
+  const nextStmt=dayIn(ls.getFullYear(),ls.getMonth()+1,+a.stmtDay);
+  let status,days=daysBetween(now,due);
+  if(amount<=0){status='ok';}
+  else status=days<0?'over':days<=5?'soon':'later';
+  return{acc:a,amount,due,days,stmt:nextStmt,status,kind:'card',unbilled:Math.max(0,out-amount)}
+}
+function loanDue(a){
+  if(!a.emiDay||!num(a.emi))return null;
+  const now=new Date();now.setHours(0,0,0,0);
+  if(a.end&&pd(a.end)<now&&balance(a)<=0)return null;
+  const thisDue=dayIn(now.getFullYear(),now.getMonth(),+a.emiDay);
+  const ym=iso(thisDue).slice(0,7);
+  const paid=S.txns.some(t=>t.type==='transfer'&&t.to===a.id&&t.date.startsWith(ym));
+  let due=thisDue,status;
+  if(paid){due=dayIn(now.getFullYear(),now.getMonth()+1,+a.emiDay);status='ok'}
+  const days=daysBetween(now,due);
+  if(!status)status=days<0?'over':days<=5?'soon':'later';
+  const nextAfterPaid=paid?'Paid for '+thisDue.toLocaleDateString('en-IN',{month:'short'}):'';
+  return{acc:a,amount:num(a.emi),due,days,status,kind:'loan',paidNote:nextAfterPaid}
+}
+function allDues(){const r=[];for(const a of S.accounts){if(a.archived)continue;if(a.type==='credit'){const d=cardDue(a);if(d)r.push(d)}if(a.type==='loan'){const d=loanDue(a);if(d)r.push(d)}}return r.sort((x,y)=>x.due-y.due)}
+function pillFor(d){const m={over:['over','Overdue '+Math.abs(d.days)+'d'],soon:['soon',d.days===0?'Due today':'In '+d.days+'d'],ok:['ok','Paid ✓'],later:['later','In '+d.days+'d']}[d.status];return`<span class="pill ${m[0]}">${m[1]}</span>`}
+function dueRow(d){
+  const a=d.acc;
+  const sub=d.kind==='card'?`Due ${d.due.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}${d.stmt?' · Next statement '+d.stmt.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}):''}${d.unbilled?' · Unbilled '+fmt(d.unbilled):''}`:`EMI on ${d.due.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}${d.paidNote?' · '+d.paidNote:''}`;
+  return`<div class="due"><div class="d1"><b>${TYPES[a.type].ic} ${esc(a.name)}</b><small>${sub}</small></div>
+  <div class="row"><b>${fmt(d.amount)}</b>${pillFor(d)}${d.status!=='ok'?`<button class="btn sm" onclick="payNow('${a.id}',${d.amount})">Pay</button>`:''}</div></div>`
+}
+function payNow(id,amt){openTxn('transfer');$('tTo').value=id;$('tAmt').value=amt||'';const a=acc(id);$('tPurpose').value=a.type==='credit'?'Credit card bill':'Loan EMI';$('tNote').value=(a.type==='credit'?'Bill payment ':'EMI ')+a.name;const firstBank=S.accounts.find(x=>x.type==='bank'&&!x.archived);if(firstBank)$('tFrom').value=firstBank.id}
+
+/* ================= NAV ================= */
+const TITLES={dashboard:['Dashboard','Your complete money picture'],accounts:['Accounts','Banks, cash, locker, cards, loans & investments'],transactions:['Transactions','Every expense, income and transfer'],dues:['Dues & EMIs','Credit card bills, loan EMIs and maturities'],reports:['Reports','Where your money goes'],backup:['Google Sheet','Link your own sheet · Backup'],settings:['Settings','Personalise the app']};
+let view='dashboard';
+document.querySelectorAll('.nav[data-v]').forEach(b=>b.onclick=()=>go(b.dataset.v));
+function mgo(v){$('more').classList.remove('show');go(v)}
+function go(v){if(!S)return;view=v;document.querySelectorAll('.bnav button[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===v||(b.dataset.v==='more'&&['transactions','reports','backup','settings'].includes(v))));document.querySelectorAll('.nav[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===v));document.querySelectorAll('.section').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));$('vTitle').textContent=TITLES[v][0];$('vSub').textContent=TITLES[v][1];render();window.scrollTo(0,0)}
+function render(){
+  const nm=S.settings.name||SES.user;$('userChip').innerHTML=`<div class="av">${esc(nm[0].toUpperCase())}</div><div><b>${esc(nm)}</b><br><small style="color:var(--muted)">@${esc(SES.user)}</small></div>`;
+  ({dashboard:renderDash,accounts:renderAccounts,transactions:renderTxns,dues:renderDues,reports:renderReports,backup:renderBackup,settings:renderSettings})[view]();
+}
+
+/* ================= DASHBOARD ================= */
+const charts={};
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();const el=$(id);if(!el||typeof Chart==='undefined')return;const col=getComputedStyle(document.body).getPropertyValue('--muted');Chart.defaults.color=col.trim();charts[id]=new Chart(el,cfg)}
+const PAL=['#6c7cff','#22c55e','#f59e0b','#ef4444','#06b6d4','#a855f7','#ec4899','#84cc16','#f97316','#14b8a6','#eab308','#64748b'];
+function renderDash(){
+  const T=totals();const ym=today().slice(0,7);const M=monthStats(ym);
+  $('dashStats').innerHTML=`
+  <div class="card stat"><div class="lbl">Net worth</div><div class="val ${T.net>=0?'pos':'neg'}">${fmt(T.net)}</div><div class="hint">Assets − Liabilities</div></div>
+  <div class="card stat"><div class="lbl">Total assets</div><div class="val">${fmt(T.assets)}</div><div class="hint">Banks, cash, locker, wallets, investments</div></div>
+  <div class="card stat"><div class="lbl">Total liabilities</div><div class="val neg">${fmt(T.liab)}</div><div class="hint">Card outstanding + loans</div></div>
+  <div class="card stat"><div class="lbl">This month</div><div class="val"><span class="pos">${fmt(M.inc)}</span></div><div class="hint">Spent <b class="neg">${fmt(M.exp)}</b> · Saved <b>${fmt(M.inc-M.exp)}</b></div></div>`;
+  const order=['bank','cash','locker','wallet','invest','other','credit','loan'];
+  $('dashTiles').innerHTML=order.map(k=>{const n=S.accounts.filter(a=>a.type===k&&!a.archived).length;return`<div class="tile" onclick="go('accounts');$('accFilter').value='${k}';renderAccounts()"><div class="lbl">${TYPES[k].ic} ${TYPES[k].l} (${n})</div><div class="val ${TYPES[k].asset?'':'neg'}">${fmt(T.g[k]||0)}</div></div>`}).join('');
+  const now=new Date();now.setHours(0,0,0,0);
+  const dues=allDues().filter(d=>d.status!=='ok'&&d.days<=30);
+  $('dashDues').innerHTML=dues.length?dues.slice(0,8).map(dueRow).join(''):'<div class="empty">No dues in the next 30 days 🎉</div>';
+  const cats=Object.entries(M.cat).sort((a,b)=>b[1]-a[1]);
+  mkChart('chCatDash',{type:'doughnut',data:{labels:cats.map(c=>c[0]),datasets:[{data:cats.map(c=>c[1]),backgroundColor:PAL,borderWidth:0}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
+  if(!cats.length)$('chCatDash').parentElement.insertAdjacentHTML('beforeend','');
+  $('dashRecent').innerHTML=txnTable(sortedTxns().slice(0,8),true);
+}
+
+/* ================= ACCOUNTS ================= */
+function renderAccounts(){
+  const f=$('accFilter');if(f.options.length<2)f.innerHTML='<option value="">All types</option>'+Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.ic} ${v.l}</option>`).join('');
+  const ft=f.value;let html='';
+  for(const[k,v]of Object.entries(TYPES)){
+    if(ft&&ft!==k)continue;
+    const list=S.accounts.filter(a=>a.type===k);if(!list.length&&ft!==k)continue;
+    const tot=list.filter(a=>!a.archived).reduce((s,a)=>s+balance(a),0);
+    html+=`<div class="groupttl"><span>${v.ic} ${v.l}s</span><span>${v.asset?'':'Owed: '}${fmt(tot)}</span></div><div class="grid g3">`;
+    html+=list.length?list.map(accCard).join(''):`<div class="empty card">No ${v.l.toLowerCase()} yet. <a href="#" onclick="openAcc(null,'${k}');return false" style="color:var(--accent)">Add one</a></div>`;
+    html+='</div>';
+  }
+  if(!S.accounts.length&&!ft)html=`<div class="card empty" style="margin-top:14px"><div style="font-size:40px">🏦</div><p style="margin:10px 0">No accounts yet. Add your bank accounts, cash wallet, locker, credit cards, loans and investments.</p><button class="btn" onclick="openAcc()">+ Add first account</button> <button class="btn ghost" onclick="loadDemo()">Try demo data</button></div>`;
+  $('accList').innerHTML=html;
+}
+function accCard(a){
+  const b=balance(a);const col=a.color||TYPES[a.type].c;let meta='',extra='';
+  if(a.type==='credit'){const lim=num(a.limit);const used=lim?Math.min(100,Math.max(0,b/lim*100)):0;
+    meta=`<span>Limit ${fmt(lim)}</span><span>Avail ${fmt(lim-b)}</span>`;
+    extra=`<div class="bar"><i style="width:${used}%"></i></div><div class="m" style="margin-top:6px"><span>Stmt: ${a.stmtDay||'-'} · Due: ${a.dueDay||'-'}</span><span>${used.toFixed(0)}% used</span></div>`}
+  else if(a.type==='loan'){const p=num(a.principal);const paid=p?Math.min(100,Math.max(0,(p-b)/p*100)):0;
+    meta=`<span>EMI ${fmt(num(a.emi))} on ${a.emiDay||'-'}</span><span>${a.rate?a.rate+'%':''}</span>`;
+    extra=p?`<div class="bar"><i style="width:${paid}%"></i></div><div class="m" style="margin-top:6px"><span>${paid.toFixed(0)}% repaid of ${fmt(p)}</span><span>${a.end?'Ends '+dfmt(a.end):''}</span></div>`:''}
+  else if(a.type==='invest'){meta=`<span>${esc(a.invType||'')}</span><span>${a.rate?a.rate+'% ':''}${a.mature?'· Matures '+dfmt(a.mature):''}</span>`}
+  else meta=`<span>${esc(a.bank||'')}</span><span>${a.last4?'••'+esc(a.last4):''}</span>`;
+  return`<div class="acc" style="background:linear-gradient(135deg,${col},${shade(col,-35)});${a.archived?'opacity:.5':''}">
+   <div class="acts">${['invest','locker','cash','other','wallet','bank'].includes(a.type)?`<button title="Update value" onclick="openVal('${a.id}')">↻</button>`:''}<button title="Transactions" onclick="showAccTx('${a.id}')">🧾</button><button title="Edit" onclick="openAcc('${a.id}')">✎</button><button title="Delete" onclick="delAcc('${a.id}')">🗑</button></div>
+   <div><div class="t">${TYPES[a.type].ic} ${TYPES[a.type].l}${a.bank&&a.type!=='bank'?' · '+esc(a.bank):''}${a.archived?' · archived':''}</div><div class="n">${esc(a.name)}</div></div>
+   <div><div class="t">${isAsset(a)?'Balance':'Outstanding'}</div><div class="b">${fmt(b)}</div>${extra}</div>
+   <div class="m">${meta}</div></div>`
+}
+function shade(hex,p){let c=hex.replace('#','');if(c.length===3)c=c.split('').map(x=>x+x).join('');const n=parseInt(c,16);let r=(n>>16)+p,g=((n>>8)&255)+p,b=(n&255)+p;const cl=v=>Math.max(0,Math.min(255,v));return'#'+((1<<24)+(cl(r)<<16)+(cl(g)<<8)+cl(b)).toString(16).slice(1)}
+function showAccTx(id){go('transactions');$('fAcc').value=id;renderTxns()}
+
+const AF=['Name','Bank','Last4','InvType','Open','Limit','Stmt','Due','LoanType','Principal','Emi','EmiDay','Tenure','End','Rate','Mature','Ifsc','Color','Notes'];
+const AK=['name','bank','last4','invType','opening','limit','stmtDay','dueDay','loanType','principal','emi','emiDay','tenure','end','rate','mature','ifsc','color','notes'];
+function openAcc(id,type){
+  $('aType').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.ic} ${v.l}</option>`).join('');
+  $('aInvType').innerHTML=INV_TYPES.map(x=>`<option>${x}</option>`).join('');
+  const a=id?acc(id):null;$('aId').value=id||'';$('accTitle').textContent=a?'Edit Account':'Add Account';
+  $('aType').value=a?a.type:(type||'bank');
+  AF.forEach((f,i)=>{const el=$('a'+f);el.value=a?(a[AK[i]]??''):(f==='Open'?0:'')});
+  if(!a)$('aColor').value=TYPES[$('aType').value].c;
+  accFields();$('mAcc').classList.add('show');
+}
+function accFields(){const t=$('aType').value;document.querySelectorAll('#mAcc [data-for]').forEach(d=>d.style.display=d.dataset.for.split(' ').includes(t)?'':'none');$('aOpenLbl').textContent=TYPES[t].open;if(!$('aId').value)$('aColor').value=TYPES[t].c}
+function saveAcc(){
+  const name=$('aName').value.trim();if(!name)return toast('Account name is required');
+  const id=$('aId').value;const o=id?acc(id):{id:uid(),created:today()};
+  o.type=$('aType').value;AF.forEach((f,i)=>{o[AK[i]]=$('a'+f).value});o.name=name;
+  ['opening','limit','principal','emi','rate'].forEach(k=>o[k]=o[k]===''?'':num(o[k]));
+  if(o.type==='loan'&&o.principal===''&&!id)o.principal=num(o.opening);
+  if(!id)S.accounts.push(o);save();closeM('mAcc');render();toast('Account saved');
+}
+function delAcc(id){
+  const used=S.txns.filter(t=>t.account===id||t.from===id||t.to===id).length;
+  const a=acc(id);
+  if(used){if(confirm(`"${a.name}" has ${used} transactions.\n\nOK = Archive (hide, keep history)\nCancel = keep`)){a.archived=!a.archived;save();render()}return}
+  if(confirm('Delete "'+a.name+'"?')){S.accounts=S.accounts.filter(x=>x.id!==id);save();render();toast('Deleted')}
+}
+function openVal(id){const a=acc(id);$('vId').value=id;$('vInfo').textContent=`${a.name}: app balance is ${fmt(balance(a))}. Enter the actual amount (e.g. today's fund value, cash counted in locker, bank passbook balance). The difference is saved as a value adjustment.`;$('vAmt').value=balance(a).toFixed(2);$('mVal').classList.add('show')}
+function saveVal(){const a=acc($('vId').value);const want=num($('vAmt').value);const cur=balance(a);a.adj=num(a.adj)+(want-cur);a.valUpdated=today();save();closeM('mVal');render();toast('Value updated')}
+
+/* ================= TRANSACTIONS ================= */
+let tType='expense';
+function accOptions(filter){return S.accounts.filter(a=>!a.archived&&(!filter||filter(a))).map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)} (${fmt(balance(a))})</option>`).join('')}
+function openTxn(type,id){
+  if(!S.accounts.length){toast('Add an account first');go('accounts');openAcc();return}
+  const t=id?S.txns.find(x=>x.id===id):null;
+  $('tId').value=id||'';$('txnTitle').textContent=t?'Edit Transaction':'Add Transaction';
+  $('tAcc').innerHTML=accOptions();$('tFrom').innerHTML=accOptions();$('tTo').innerHTML=accOptions();
+  setTType(t?t.type:type);
+  $('tAmt').value=t?t.amount:'';$('tDate').value=t?t.date:today();$('tNote').value=t?t.note||'':'';$('tMode').value=t?t.mode||'UPI':'UPI';
+  if(t){if(t.type==='transfer'){$('tFrom').value=t.from;$('tTo').value=t.to;$('tPurpose').value=t.purpose||'Self transfer'}else{$('tAcc').value=t.account;$('tCat').value=t.category}}
+  else if($('tTo').options.length>1)$('tTo').selectedIndex=1;
+  $('mTxn').classList.add('show');setTimeout(()=>$('tAmt').focus(),50);
+}
+function setTType(t){tType=t;document.querySelectorAll('#tTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  document.querySelectorAll('.tx-single').forEach(e=>e.style.display=t==='transfer'?'none':'');document.querySelectorAll('.tx-transfer').forEach(e=>e.style.display=t==='transfer'?'':'none');
+  $('tCat').innerHTML=(t==='income'?S.cats.income:S.cats.expense).map(c=>`<option>${esc(c)}</option>`).join('');
+  $('tAccLbl').textContent=t==='income'?'Received in account *':'Paid from account *';}
+function saveTxn(){
+  const amt=num($('tAmt').value);if(amt<=0)return toast('Enter a valid amount');
+  const date=$('tDate').value;if(!date)return toast('Select a date');
+  const id=$('tId').value;const o=id?S.txns.find(x=>x.id===id):{id:uid()};
+  Object.assign(o,{type:tType,amount:amt,date,note:$('tNote').value.trim(),mode:$('tMode').value});
+  if(tType==='transfer'){o.from=$('tFrom').value;o.to=$('tTo').value;o.purpose=$('tPurpose').value;delete o.account;delete o.category;if(o.from===o.to)return toast('From and To must be different')}
+  else{o.account=$('tAcc').value;o.category=$('tCat').value;delete o.from;delete o.to;delete o.purpose}
+  if(!id)S.txns.push(o);save();closeM('mTxn');render();toast('Saved');
+}
+function delTxn(id){if(confirm('Delete this transaction?')){S.txns=S.txns.filter(t=>t.id!==id);save();render()}}
+function sortedTxns(){return S.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id>a.id?1:-1))}
+function txnTable(list,compact){
+  if(!list.length)return'<div class="empty">No transactions yet. Use − Expense, + Income or ⇄ Transfer at the top.</div>';
+  return`<table><thead><tr><th>Date</th><th>Type</th><th>Account</th><th class="${compact?'hide-sm':''}">Category / Purpose</th><th class="hide-sm">Note</th><th class="amt">Amount</th><th></th></tr></thead><tbody>${list.map(t=>{
+    const accTxt=t.type==='transfer'?`${esc(accName(t.from))} → ${esc(accName(t.to))}`:esc(accName(t.account));
+    const sign=t.type==='expense'?'neg':t.type==='income'?'pos':'';
+    return`<tr><td style="white-space:nowrap">${dfmt(t.date)}</td><td><span class="tag ${t.type}">${t.type}</span></td><td>${accTxt}</td><td class="${compact?'hide-sm':''}">${esc(t.category||t.purpose||'')}</td><td class="hide-sm" style="color:var(--muted)">${esc(t.note||'')}${t.mode?' <small>· '+esc(t.mode)+'</small>':''}</td><td class="amt ${sign}"><b>${t.type==='expense'?'−':t.type==='income'?'+':''}${fmt(num(t.amount))}</b></td><td style="white-space:nowrap"><button class="icon-btn" onclick="openTxn('','${t.id}')">✎</button><button class="icon-btn" onclick="delTxn('${t.id}')">🗑</button></td></tr>`}).join('')}</tbody></table>`
+}
+function filteredTxns(){
+  const q=$('fSearch').value.toLowerCase(),ty=$('fType').value,ac=$('fAcc').value,m=$('fMonth').value;
+  return sortedTxns().filter(t=>(!ty||t.type===ty)&&(!ac||t.account===ac||t.from===ac||t.to===ac)&&(!m||t.date.startsWith(m))&&(!q||((t.note||'')+' '+(t.category||'')+' '+(t.purpose||'')).toLowerCase().includes(q)));
+}
+function renderTxns(){
+  const cur=$('fAcc').value;$('fAcc').innerHTML='<option value="">All accounts</option>'+S.accounts.map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)}</option>`).join('');$('fAcc').value=cur;
+  const L=filteredTxns();let inc=0,exp=0,tr=0;L.forEach(t=>{const v=num(t.amount);if(t.type==='income')inc+=v;else if(t.type==='expense')exp+=v;else tr+=v});
+  $('txnSummary').innerHTML=`<div class="card stat"><div class="lbl">Income (${L.filter(t=>t.type==='income').length})</div><div class="val pos">${fmt(inc)}</div></div><div class="card stat"><div class="lbl">Expense (${L.filter(t=>t.type==='expense').length})</div><div class="val neg">${fmt(exp)}</div></div><div class="card stat"><div class="lbl">Transfers (${L.filter(t=>t.type==='transfer').length})</div><div class="val">${fmt(tr)}</div></div>`;
+  $('txnTable').innerHTML=txnTable(L);
+}
+function clearFilters(){['fSearch','fType','fAcc','fMonth'].forEach(i=>$(i).value='');renderTxns()}
+
+/* ================= DUES VIEW ================= */
+function renderDues(){
+  const D=allDues();const cards=D.filter(d=>d.kind==='card'),loans=D.filter(d=>d.kind==='loan');
+  const pend=D.filter(d=>d.status!=='ok');const over=D.filter(d=>d.status==='over');
+  const week=pend.filter(d=>d.days>=0&&d.days<=7);
+  $('dueStats').innerHTML=`<div class="card stat"><div class="lbl">Overdue</div><div class="val neg">${fmt(over.reduce((s,d)=>s+d.amount,0))}</div><div class="hint">${over.length} item(s)</div></div>
+  <div class="card stat"><div class="lbl">Due in next 7 days</div><div class="val warn">${fmt(week.reduce((s,d)=>s+d.amount,0))}</div><div class="hint">${week.length} item(s)</div></div>
+  <div class="card stat"><div class="lbl">Monthly EMI total</div><div class="val">${fmt(S.accounts.filter(a=>a.type==='loan'&&!a.archived).reduce((s,a)=>s+num(a.emi),0))}</div><div class="hint">${S.accounts.filter(a=>a.type==='loan'&&!a.archived).length} active loan(s)</div></div>`;
+  $('dueCards').innerHTML=cards.length?cards.map(dueRow).join(''):'<div class="empty">Add credit cards with a due day to track bills.</div>';
+  $('dueLoans').innerHTML=loans.length?loans.map(dueRow).join(''):'<div class="empty">Add loans with EMI amount and day to track EMIs.</div>';
+  const now=new Date();now.setHours(0,0,0,0);
+  const inv=S.accounts.filter(a=>a.type==='invest'&&a.mature&&!a.archived).map(a=>({a,d:pd(a.mature)})).sort((x,y)=>x.d-y.d);
+  $('dueInv').innerHTML=inv.length?inv.map(({a,d})=>{const n=daysBetween(now,d);return`<div class="due"><div class="d1"><b>📈 ${esc(a.name)}</b><small>${esc(a.invType||'')} · Matures ${dfmt(a.mature)}</small></div><div class="row"><b>${fmt(balance(a))}</b><span class="pill ${n<0?'ok':n<=30?'soon':'later'}">${n<0?'Matured':'In '+n+'d'}</span></div></div>`}).join(''):'<div class="empty">Add a maturity date on FDs, RDs, bonds etc. to see them here.</div>';
+}
+
+/* ================= REPORTS ================= */
+function renderReports(){
+  if(!$('rMonth').value)$('rMonth').value=today().slice(0,7);
+  const ym=$('rMonth').value;const[y,m]=ym.split('-').map(Number);
+  const labels=[],inc=[],exp=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);const k=iso(d).slice(0,7);const s=monthStats(k);labels.push(d.toLocaleDateString('en-IN',{month:'short',year:'2-digit'}));inc.push(s.inc);exp.push(s.exp)}
+  mkChart('chMonthly',{type:'bar',data:{labels,datasets:[{label:'Income',data:inc,backgroundColor:'#22c55e',borderRadius:6},{label:'Expense',data:exp,backgroundColor:'#ef4444',borderRadius:6}]},options:{maintainAspectRatio:false}});
+  const cats=Object.entries(monthStats(ym).cat).sort((a,b)=>b[1]-a[1]);
+  mkChart('chCat',{type:'doughnut',data:{labels:cats.map(c=>c[0]),datasets:[{data:cats.map(c=>c[1]),backgroundColor:PAL,borderWidth:0}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
+  const T=totals();const ak=['bank','cash','locker','wallet','invest','other'].filter(k=>(T.g[k]||0)>0);
+  mkChart('chAlloc',{type:'pie',data:{labels:ak.map(k=>TYPES[k].l),datasets:[{data:ak.map(k=>T.g[k]),backgroundColor:PAL,borderWidth:0}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
+  const cc=S.accounts.filter(a=>a.type==='credit'&&!a.archived);
+  $('utilList').innerHTML=cc.length?cc.map(a=>{const b=balance(a),l=num(a.limit),p=l?Math.max(0,b/l*100):0;const c=p>70?'var(--red)':p>30?'var(--amber)':'var(--green)';return`<div style="margin-bottom:14px"><div class="row" style="justify-content:space-between;margin-bottom:5px"><b>${esc(a.name)}</b><span>${fmt(b)} / ${fmt(l)} · <b style="color:${c}">${p.toFixed(0)}%</b></span></div><div class="pbar"><i style="width:${Math.min(100,p)}%;background:${c}"></i></div></div>`}).join('')+'<small style="color:var(--muted)">Keep utilization under 30% for a healthy credit score.</small>':'<div class="empty">No credit cards added.</div>';
+  const rows=S.accounts.filter(a=>!a.archived).map(a=>{let i=0,e=0,ti=0,to=0;S.txns.forEach(t=>{if(!t.date.startsWith(ym))return;const v=num(t.amount);if(t.account===a.id){if(t.type==='income')i+=v;if(t.type==='expense')e+=v}if(t.type==='transfer'){if(t.to===a.id)ti+=v;if(t.from===a.id)to+=v}});
+    const endD=iso(new Date(y,m,0));return`<tr><td>${TYPES[a.type].ic} ${esc(a.name)}</td><td class="amt pos">${fmt(i)}</td><td class="amt neg">${fmt(e)}</td><td class="amt">${fmt(ti)}</td><td class="amt">${fmt(to)}</td><td class="amt"><b>${fmt(balance(a,endD))}</b></td></tr>`}).join('');
+  $('accSummary').innerHTML=rows?`<table><thead><tr><th>Account</th><th class="amt">Income</th><th class="amt">Expense</th><th class="amt">Transfer in</th><th class="amt">Transfer out</th><th class="amt">Month-end balance</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="empty">No accounts.</div>';
+}
+
+/* ================= BACKUP / SYNC ================= */
+const GS_CODE=`// CASHFLOW - Google Sheet link (paste in Extensions > Apps Script of YOUR sheet)
+const SECRET = 'MY_SECRET_KEY';   // change this to your own long secret
+
+function ss_(){return SpreadsheetApp.getActiveSpreadsheet();}
+function sh_(n){const s=ss_();return s.getSheetByName(n)||s.insertSheet(n);}
+function out_(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);}
+
+function doGet(e){
+  if(!e.parameter.key||e.parameter.key!==SECRET) return out_({ok:false,error:'Wrong secret key'});
+  const db=ss_().getSheetByName('_workrow_db');
+  if(!db||!db.getLastRow()) return out_({ok:true,data:null});
+  const txt=db.getRange(1,1,db.getLastRow(),1).getDisplayValues().map(r=>r[0]).join('');
+  return out_({ok:true,data:JSON.parse(txt)});
+}
+
+function doPost(e){
+  const b=JSON.parse(e.postData.contents);
+  if(!b.key||b.key!==SECRET) return out_({ok:false,error:'Wrong secret key'});
+  const lock=LockService.getScriptLock(); lock.waitLock(20000);
+  try{
+    table_('Summary',b.summary); table_('Accounts',b.accounts); table_('Transactions',b.txns);
+    const txt=JSON.stringify(b.data),rows=[];
+    for(let i=0;i<txt.length;i+=40000) rows.push([txt.slice(i,i+40000)]);
+    const db=sh_('_workrow_db'); db.clear();
+    if(rows.length){const r=db.getRange(1,1,rows.length,1); r.setNumberFormat('@'); r.setValues(rows);}
+    db.hideSheet();
+    return out_({ok:true,saved:new Date().toISOString()});
+  } finally { lock.releaseLock(); }
+}
+
+function table_(name,rows){
+  const s=sh_(name); s.clearContents();
+  if(!rows||!rows.length) return;
+  s.getRange(1,1,rows.length,rows[0].length).setValues(rows);
+  s.getRange(1,1,1,rows[0].length).setFontWeight('bold').setBackground('#e8eaff');
+  s.setFrozenRows(1); s.autoResizeColumns(1,rows[0].length);
+}`;
+/* ---- Google Sheet (one-click, user's own Drive) ---- */
+let gTok=null,gExp=0;
+const SHEETS=['Summary','Accounts','Transactions','_workrow_db'];
+function gAuth(prompt){return new Promise((res,rej)=>{
+  if(!GOOGLE_CLIENT_ID)return rej(new Error('Google login is not set up in this copy (seller must add GOOGLE_CLIENT_ID). Use Advanced Apps Script below.'));
+  if(!(window.google&&google.accounts&&google.accounts.oauth2))return rej(new Error('Google script not loaded. Check internet.'));
+  const c=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file openid email',login_hint:SES.user,
+    callback:r=>{if(r.error)return rej(new Error(r.error));gTok=r.access_token;gExp=Date.now()+((r.expires_in||3600)-60)*1000;S.settings.needReauth=false;res(gTok)},
+    error_callback:e=>rej(new Error(e&&e.type==='popup_closed'?'Sign-in window closed':'Sign-in failed'))});
+  c.requestAccessToken({prompt:prompt||''})})}
+async function gapi(url,opt={}){
+  if(!gTok||Date.now()>gExp)await gAuth('');
+  const r=await fetch(url,Object.assign({},opt,{headers:{Authorization:'Bearer '+gTok,'Content-Type':'application/json'}}));
+  if(r.status===401){gTok=null;throw new Error('Session expired, press Connect Google again')}
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error((j.error&&j.error.message)||('HTTP '+r.status));return j}
+async function connectGoogle(){
+  try{await gAuth('select_account');
+    const me=await gapi('https://www.googleapis.com/oauth2/v3/userinfo');
+    if((me.email||'').toLowerCase()!==SES.user){gTok=null;return toast('Choose the Google account '+SES.user+' (you picked '+(me.email||'another')+')')}
+    let id=S.settings.sheetId;
+    if(!id){const q=encodeURIComponent("name='CASHFLOW Data' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+      const f=await gapi('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name)');
+      if(f.files&&f.files.length){id=f.files[0].id;S.settings.sheetId=id;save(true);
+        if(confirm('Your CASHFLOW sheet already exists. Load your data from it now?\n\nOK = load from Sheet · Cancel = upload this device\'s data')){await gPull();renderBackup();return}}
+      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_IN',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});
+        id=c.spreadsheetId;S.settings.sheetId=id;}}
+    save(true);await gPush(true);renderBackup()}
+  catch(e){toast('Google: '+e.message)}
+}
+async function gPush(manual){
+  const id=S&&S.settings.sheetId;if(!id){if(manual)toast('Connect Google first');return}
+  if(!gTok||Date.now()>gExp){if(!manual){S.settings.needReauth=true;if(view==='backup')renderBackup();return}}
+  try{const base='https://sheets.googleapis.com/v4/spreadsheets/'+id;const t=sheetTables(true);
+    const txt=JSON.stringify(dataForCloud());const rows=[];for(let i=0;i<txt.length;i+=40000)rows.push([txt.slice(i,i+40000)]);
+    const meta=await gapi(base+'?fields=sheets.properties');const need={Summary:t.summary.length,Accounts:t.accounts.length,Transactions:t.txns.length,_workrow_db:rows.length};
+    const have={};(meta.sheets||[]).forEach(x=>have[x.properties.title]=x.properties);const reqs=[];
+    SHEETS.forEach(n=>{if(!have[n])reqs.push({addSheet:{properties:{title:n,hidden:n==='_workrow_db',gridProperties:{rowCount:Math.max(1000,need[n]+50),columnCount:20}}}});
+      else if(have[n].gridProperties.rowCount<need[n]+5)reqs.push({updateSheetProperties:{properties:{sheetId:have[n].sheetId,gridProperties:{rowCount:need[n]+500}},fields:'gridProperties.rowCount'}})});
+    if(reqs.length)await gapi(base+':batchUpdate',{method:'POST',body:JSON.stringify({requests:reqs})});
+    await gapi(base+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:SHEETS})});
+    await gapi(base+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:[{range:'Summary!A1',values:t.summary},{range:'Accounts!A1',values:t.accounts},{range:'Transactions!A1',values:t.txns},{range:'_workrow_db!A1',values:rows}]})});
+    S.settings.lastSync=Date.now();S.settings.needReauth=false;save(true);if(manual)toast('Saved to your Google Sheet ✓');if(S.settings.lastBackup!==today())gBackup(false).catch(()=>{});if(view==='backup')renderBackup()}
+  catch(e){if(manual)toast('Google: '+e.message);else{S.settings.needReauth=true}}
+}
+async function gBackup(manual){
+  try{if(manual&&(!gTok||Date.now()>gExp))await gAuth('');
+    let fid=S.settings.backupFolder;
+    if(fid){try{await gapi('https://www.googleapis.com/drive/v3/files/'+fid+'?fields=id,trashed').then(f=>{if(f.trashed)fid=''})}catch(e){fid=''}}
+    if(!fid){const f=await gapi('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',body:JSON.stringify({name:'CASHFLOW Backups',mimeType:'application/vnd.google-apps.folder'})});fid=f.id;S.settings.backupFolder=fid}
+    const bd='wrb'+Date.now(),meta={name:'CASHFLOW Backup '+today()+' '+new Date().toTimeString().slice(0,5)+'.json',parents:[fid],mimeType:'application/json'};
+    const body=`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(dataForCloud())}\r\n--${bd}--`;
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+gTok,'Content-Type':'multipart/related; boundary='+bd},body});if(!r.ok)throw new Error('Backup upload failed');
+    const L=await gapi('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("'"+fid+"' in parents and trashed=false")+'&orderBy=createdTime%20desc&pageSize=100&fields=files(id)');
+    for(const f of (L.files||[]).slice(30))await gapi('https://www.googleapis.com/drive/v3/files/'+f.id,{method:'DELETE'}).catch(()=>{});
+    S.settings.lastBackup=today();save(true);if(manual)toast('Backup saved to your Google Drive ✓')}
+  catch(e){if(manual)toast('Google: '+e.message)}
+}
+async function gPull(){
+  const id=S.settings.sheetId;const r=await gapi('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/_workrow_db!A:A');
+  const txt=(r.values||[]).map(x=>x[0]).join('');if(!txt){toast('Your Sheet has no CASHFLOW data yet');return}
+  const keep=Object.assign({},S.settings);S=normalize(JSON.parse(txt));['sheetId','backupFolder','lastBackup','syncUrl','syncKey','syncAuto','lockMin','theme','name'].forEach(k=>S.settings[k]=keep[k]);
+  S.settings.lastSync=Date.now();save(true);render();toast('Loaded from your Google Sheet ✓')}
+async function gPullAsk(){if(!S.settings.sheetId)return toast('Connect Google first');if(confirm('Replace this device\'s data with your Google Sheet copy?'))try{await gPull()}catch(e){toast('Google: '+e.message)}}
+function gUnlink(){if(!S.settings.sheetId)return;if(confirm('Stop syncing with your Google Sheet? The sheet stays in your Drive.')){S.settings.sheetId='';gTok=null;save(true);renderBackup()}}
+function renderGoogle(){const id=S.settings.sheetId;const b=$('gBadge');
+  if(!id){b.className='pill later';b.textContent='Not linked'}else if(S.settings.needReauth||!gTok){b.className='pill soon';b.textContent='Linked · press Connect to resume'}else{b.className='pill ok';b.textContent='Auto-saving ✓'}
+  const o=$('gOpen');if(id){o.style.display='';o.href='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit'}else o.style.display='none';
+  if(!GOOGLE_CLIENT_ID)$('gInfo').innerHTML='One-click Google Sheet is not switched on in this copy yet. Use <b>Advanced: link via Apps Script</b> below, or ask your seller.'}
+function renderBackup(){renderGoogle();$('syncUrl').value=S.settings.syncUrl||'';$('syncKey').value=S.settings.syncKey||'';$('syncAuto').value=S.settings.syncAuto||'1';$('gsCode').textContent=GS_CODE;$('syncStatus').textContent=S.settings.lastSync?'Last synced with your Sheet: '+new Date(S.settings.lastSync).toLocaleString('en-IN'):'Not synced yet.'}
+function copyCode(){navigator.clipboard.writeText(GS_CODE).then(()=>toast('Code copied'))}
+function saveSync(){S.settings.syncUrl=$('syncUrl').value.trim();S.settings.syncKey=$('syncKey').value;S.settings.syncAuto=$('syncAuto').value;save(true);toast('Sync settings saved')}
+const safeCell=v=>{if(typeof v==='number')return v;v=String(v??'');return/^[=+\-@]/.test(v)?"'"+v:v};
+function dataForCloud(){const c=JSON.parse(JSON.stringify(S));c.settings.syncKey='';c.settings.syncUrl='';return c}
+function sheetTables(raw){const safeCell2=raw?(v=>typeof v==='number'?v:String(v??'')):safeCell;
+  const T=totals();
+  const summary=[['Item','Amount','Updated'],['Net worth',T.net,new Date().toLocaleString('en-IN')],['Total assets',T.assets,''],['Total liabilities',T.liab,'']].concat(Object.keys(TYPES).map(k=>[TYPES[k].l,T.g[k]||0,'']));
+  const accounts=[['Name','Type','Bank / Company','Last 4','Balance / Outstanding','Credit limit','Statement day','Due day','EMI','EMI day','Rate %','Investment type','Maturity','Archived']].concat(S.accounts.map(a=>[a.name,TYPES[a.type].l,a.bank||'',a.last4?String(a.last4):'',balance(a),num(a.limit)||'',a.stmtDay||'',a.dueDay||'',num(a.emi)||'',a.emiDay||'',a.rate||'',a.invType||'',a.mature||'',a.archived?'Yes':''].map(safeCell2)));
+  const txns=[['Date','Type','Account','From','To','Category / Purpose','Mode','Note','Amount']].concat(sortedTxns().map(t=>[t.date,t.type,t.account?accName(t.account):'',t.from?accName(t.from):'',t.to?accName(t.to):'',t.category||t.purpose||'',t.mode||'',t.note||'',num(t.amount)].map(safeCell2)));
+  return{summary,accounts,txns}
+}
+async function pushCloud(manual){
+  const u=S&&S.settings.syncUrl,k=S&&S.settings.syncKey;if(!u||!k){if(manual)toast('Add your Sheet Web App URL and secret key first');return}
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(u)){if(manual)toast('URL must start with https://script.google.com/');return}
+  try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:k,data:dataForCloud()},sheetTables()))});const j=await r.json();
+    if(j.ok){S.settings.lastSync=Date.now();save(true);if(manual)toast('Synced to your Google Sheet ✓');if(view==='backup')renderBackup()}else toast('Sheet error: '+(j.error||'unknown'))}
+  catch(e){if(manual)toast('Sync failed: check URL, deployment access (Anyone) or internet')}
+}
+async function pullCloud(){
+  const u=S.settings.syncUrl,k=S.settings.syncKey;if(!u||!k)return toast('Add Web App URL and key first');
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(u))return toast('URL must start with https://script.google.com/');
+  if(!confirm('Replace your data on this device with the copy in your Google Sheet?'))return;
+  try{const r=await fetch(u+(u.includes('?')?'&':'?')+'key='+encodeURIComponent(k));const j=await r.json();
+    if(j.ok&&j.data&&j.data.accounts){const keep={syncUrl:u,syncKey:k,syncAuto:S.settings.syncAuto,lockMin:S.settings.lockMin,theme:S.settings.theme};S=normalize(j.data);Object.assign(S.settings,keep);S.settings.lastSync=Date.now();save(true);render();toast('Downloaded from your Sheet ✓')}
+    else toast(j.error||'Your Sheet has no CASHFLOW data yet')}
+  catch(e){toast('Download failed: check URL, deployment access (Anyone) or internet')}
+}
+function dl(name,content,type){const b=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function exportJSON(){dl('cashflow-'+SES.user+'-'+today()+'.json',JSON.stringify(S,null,1),'application/json');toast('Backup downloaded')}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts)throw 0;if(!confirm('Replace current data with this backup?'))return;const keep=S.settings;S=normalize(d);S.settings=Object.assign(S.settings,{syncUrl:keep.syncUrl,syncKey:keep.syncKey,name:keep.name,lockMin:keep.lockMin});save();render();toast('Backup restored')}catch(x){toast('Invalid backup file')}};r.readAsText(f);e.target.value=''}
+function exportCSV(){const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const rows=[['Date','Type','Account','From','To','Category/Purpose','Mode','Note','Amount']];sortedTxns().forEach(t=>rows.push([t.date,t.type,t.account?accName(t.account):'',t.from?accName(t.from):'',t.to?accName(t.to):'',t.category||t.purpose||'',t.mode||'',t.note||'',t.amount]));dl('cashflow-transactions-'+today()+'.csv','\ufeff'+rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');toast('CSV downloaded')}
+
+/* ================= SETTINGS ================= */
+function renderSettings(){renderSub();$('setLock').value=S.settings.lockMin||'10';$('setName').value=S.settings.name;$('setTheme').value=S.settings.theme;$('setCur').value=S.settings.cur;$('setExpCat').value=S.cats.expense.join(', ');$('setIncCat').value=S.cats.income.join(', ')}
+function saveSettings(){S.settings.name=$('setName').value.trim()||S.settings.name;S.settings.theme=$('setTheme').value;S.settings.cur=$('setCur').value||'₹';applyTheme();save();render();toast('Settings saved')}
+function saveCats(){const sp=v=>v.split(',').map(x=>x.trim()).filter(Boolean);S.cats.expense=sp($('setExpCat').value);S.cats.income=sp($('setIncCat').value);save();toast('Categories saved')}
+function applyTheme(){const t=S?S.settings.theme:(localStorage.getItem('wr_theme')||'dark');localStorage.setItem('wr_theme',t);document.body.classList.toggle('light',t==='light')}
+function toggleTheme(){if(S){S.settings.theme=S.settings.theme==='light'?'dark':'light';save(true)}else localStorage.setItem('wr_theme',localStorage.getItem('wr_theme')==='light'?'dark':'light');applyTheme();if(S)render()}
+$('lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});$('actKey').addEventListener('keydown',e=>{if(e.key==='Enter')activateKey()});$('sPass2').addEventListener('keydown',e=>{if(e.key==='Enter')doSignup()});
+function wipeAll(){if(confirm('Delete ALL your accounts and transactions?')&&confirm('Are you sure? This cannot be undone.')){const keep=S.settings;S=blank();S.settings=keep;save(true);render();toast('All data deleted')}}
+function closeM(id){$(id).classList.remove('show')}
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'))});
+
+/* ================= DEMO ================= */
+function loadDemo(){
+  if(S.accounts.length&&!confirm('Demo data will replace your current data. Continue?'))return;
+  const keep=S.settings;S=blank();S.settings=keep;S.txns=[];
+  const A=(o)=>{o.id=uid();o.created=today();S.accounts.push(o);return o.id};
+  const hdfc=A({type:'bank',name:'HDFC Savings',bank:'HDFC Bank',last4:'4521',opening:185000,color:'#1e40af'});
+  const sbi=A({type:'bank',name:'SBI Current (Business)',bank:'State Bank of India',last4:'7788',opening:420000,color:'#0369a1'});
+  const cash=A({type:'cash',name:'Cash Wallet',opening:8500,color:'#15803d'});
+  const lock=A({type:'locker',name:'Home Locker',opening:150000,color:'#a16207'});
+  const pay=A({type:'wallet',name:'Paytm Wallet',bank:'Paytm',opening:1200,color:'#0891b2'});
+  const cc1=A({type:'credit',name:'HDFC Millennia',bank:'HDFC Bank',last4:'9012',opening:24500,limit:150000,stmtDay:5,dueDay:25,color:'#be185d'});
+  const cc2=A({type:'credit',name:'SBI SimplyClick',bank:'SBI Card',last4:'3344',opening:8200,limit:80000,stmtDay:12,dueDay:2,color:'#7c2d12'});
+  const hl=A({type:'loan',name:'Home Loan',bank:'SBI',loanType:'Home Loan',opening:2450000,principal:3000000,emi:28500,emiDay:5,rate:8.5,tenure:240,color:'#b91c1c'});
+  const cl=A({type:'loan',name:'Car Loan',bank:'ICICI Bank',loanType:'Car Loan',opening:380000,principal:600000,emi:12400,emiDay:10,rate:9.2,tenure:60,color:'#9f1239'});
+  A({type:'invest',name:'SBI FD',bank:'SBI',invType:'Fixed Deposit',opening:200000,rate:7.1,mature:iso(new Date(new Date().getFullYear()+1,2,15)),color:'#6d28d9'});
+  const mf=A({type:'invest',name:'Mutual Fund SIP',bank:'Groww',invType:'Mutual Fund / SIP',opening:145000,color:'#7c3aed'});
+  A({type:'invest',name:'Gold (SGB)',invType:'Gold / SGB',opening:95000,color:'#ca8a04'});
+  const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return iso(x)};
+  const T=(o)=>{o.id=uid();S.txns.push(o)};
+  T({type:'income',amount:95000,date:d(9),account:sbi,category:'Business income',note:'Client payment',mode:'NEFT/RTGS/IMPS'});
+  T({type:'income',amount:60000,date:d(10),account:hdfc,category:'Salary',note:'Monthly salary',mode:'NEFT/RTGS/IMPS'});
+  T({type:'expense',amount:3450,date:d(1),account:cc1,category:'Groceries',note:'DMart',mode:'Card'});
+  T({type:'expense',amount:2200,date:d(2),account:cc1,category:'Fuel',note:'Petrol',mode:'Card'});
+  T({type:'expense',amount:1850,date:d(3),account:cc2,category:'Shopping',note:'Amazon',mode:'Card'});
+  T({type:'expense',amount:640,date:d(1),account:cash,category:'Food & Dining',note:'Lunch',mode:'Cash'});
+  T({type:'expense',amount:1499,date:d(4),account:hdfc,category:'Mobile & Internet',note:'Airtel fiber',mode:'UPI'});
+  T({type:'expense',amount:18000,date:d(6),account:sbi,category:'Office / Business',note:'Office rent',mode:'NEFT/RTGS/IMPS'});
+  T({type:'expense',amount:12500,date:d(7),account:sbi,category:'GST / Taxes',note:'GST payment',mode:'Net Banking'});
+  T({type:'expense',amount:2300,date:d(5),account:hdfc,category:'Medical',note:'Pharmacy',mode:'UPI'});
+  T({type:'expense',amount:450,date:d(2),account:pay,category:'Bills & Utilities',note:'Electricity',mode:'UPI'});
+  T({type:'transfer',amount:10000,date:d(8),from:hdfc,to:cash,purpose:'Cash withdrawal',note:'ATM',mode:'Cash'});
+  T({type:'transfer',amount:5000,date:d(8),from:hdfc,to:mf,purpose:'Investment / SIP',note:'Monthly SIP',mode:'Auto-debit'});
+  T({type:'transfer',amount:20000,date:d(3),from:hdfc,to:cc1,purpose:'Credit card bill',note:'Bill payment',mode:'Net Banking'});
+  T({type:'transfer',amount:12400,date:iso(new Date(new Date().getFullYear(),new Date().getMonth(),Math.min(10,new Date().getDate()))),from:hdfc,to:cl,purpose:'Loan EMI',note:'Car EMI',mode:'Auto-debit'});
+  for(let i=1;i<=5;i++){const x=new Date();x.setMonth(x.getMonth()-i);T({type:'income',amount:60000+i*3000,date:iso(x),account:hdfc,category:'Salary',note:'Salary',mode:'NEFT/RTGS/IMPS'});T({type:'expense',amount:22000+i*2500,date:iso(x),account:cc1,category:['Shopping','Travel','Food & Dining','Groceries','Entertainment'][i-1],note:'Monthly spend',mode:'Card'});T({type:'transfer',amount:22000+i*2500,date:iso(x),from:hdfc,to:cc1,purpose:'Credit card bill',note:'Bill payment',mode:'Net Banking'})}
+  T({type:'transfer',amount:28500,date:iso(new Date(new Date().getFullYear(),new Date().getMonth(),Math.min(5,new Date().getDate()))),from:sbi,to:hl,purpose:'Loan EMI',note:'Home loan EMI',mode:'Auto-debit'});
+  save();go('dashboard');toast('Demo data loaded');
+}
+
+/* ================= INIT ================= */
+applyTheme();
+if(!window.crypto||!crypto.subtle){document.querySelector('#auth .sec').innerHTML='<b style="color:var(--red)">Open CASHFLOW over https (or from your computer) — secure encryption is not available on this connection.</b>'}
+if(!Object.keys(getUsers()).length)authTab('signup');
+if(!API_URL){$('lErr').textContent=$('sErr').textContent='Setup pending: server link (API_URL) is not added yet.'}
+else api('config').then(applyCfg).catch(()=>{});
+if(new URLSearchParams(location.search).get('razorpay_payment_link_id')){const o=JSON.parse(sessionStorage.getItem('wr_order')||'{}');if(o.email)$('lUser').value=o.email;$('lErr').style.color='var(--green)';$('lErr').textContent='Payment received. Login to confirm it.'}
+</script>
+</body>
+</html>
