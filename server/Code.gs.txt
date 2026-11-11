@@ -257,7 +257,9 @@ function adminSavePlans(b){
   return adminData();
 }
 function adminSaveSettings(b){ Object.keys(b.settings||{}).forEach(k=>{ const r=find_('Settings','key',k); if(r) upd_('Settings',r,{value:b.settings[k]}); else add_('Settings',{key:k,value:b.settings[k]}); }); return adminData(); }
-function adminIssue(b){ const email=String(b.email||'').trim().toLowerCase(); if(!validEmail_(email)) return {ok:false,error:'Invalid email'};
+function adminIssue(b){ let email=String(b.email||'').trim().toLowerCase();
+  if(!validEmail_(email)){ const d=email.replace(/\D/g,'').slice(-10); const u=d.length===10?rows_('Users').find(x=>String(x.phone||'').replace(/\D/g,'').slice(-10)===d):null;
+    if(!u) return {ok:false,error:'Enter the customer email (or a mobile number registered in the app)'}; email=u.email; }
   const p=rows_('Plans').find(x=>String(x.id)===String(b.planId)); if(!p) return {ok:false,error:'Choose a plan'};
   issueKey_(email,p.id,p.name,Number(b.days)||Number(p.days),'admin',''); return adminData(); }
 function adminExtend(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'};
