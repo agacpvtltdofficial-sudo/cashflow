@@ -1,0 +1,233 @@
+/******************************************************************
+ * CASHFLOW MASTER SERVER  (Google Apps Script, bound to your master Google Sheet)
+ * Holds ONLY: user logins, plans, orders, activation keys, settings.
+ * Users' money data never comes here – it goes to each user's own Google Drive.
+ *
+ * Script Properties (Project Settings > Script properties):
+ *   ADMIN_PASSWORD      your admin panel password (required, 10+ characters)
+ *   RAZORPAY_KEY_ID     optional – enables automatic payment links
+ *   RAZORPAY_KEY_SECRET optional
+ *   APP_URL             your published CASHFLOW link (e.g. https://name.github.io/cashflow/)
+ * Then run  setup()  once, and Deploy > New deployment > Web app
+ *   Execute as: Me   ·   Who has access: Anyone
+ ******************************************************************/
+
+const P = PropertiesService.getScriptProperties();
+const DEFAULT_APP_URL = 'https://agacpvtltdofficial-sudo.github.io/cashflow/';
+const SH = {
+  Users:    ['email','name','salt','hash','created','planId','planName','endDate','blocked','fails','lockUntil','lastLogin'],
+  Sessions: ['token','email','expires'],
+  Plans:    ['id','name','price','days','features','payLink','active'],
+  Orders:   ['orderId','email','planId','planName','amount','mode','status','linkId','linkUrl','paymentId','created','paidOn','licenseKey'],
+  Licenses: ['key','email','planId','planName','days','created','status','activatedOn','source','orderId'],
+  Settings: ['key','value']
+};
+
+/* ---------- sheet helpers ---------- */
+function ss_(){ return SpreadsheetApp.getActiveSpreadsheet(); }
+function sheet_(n){ let s=ss_().getSheetByName(n); if(!s){ s=ss_().insertSheet(n); s.getRange(1,1,1,SH[n].length).setValues([SH[n]]).setFontWeight('bold'); s.setFrozenRows(1);} return s; }
+function rows_(n){ const s=sheet_(n), v=s.getDataRange().getValues(), h=v.shift(); return v.map((r,i)=>{const o={_row:i+2}; h.forEach((k,j)=>o[k]=r[j]); return o;}); }
+function find_(n,k,val){ return rows_(n).find(r=>String(r[k]).toLowerCase()===String(val).toLowerCase()); }
+function add_(n,o){ sheet_(n).appendRow(SH[n].map(k=>o[k]===undefined?'':o[k])); }
+function upd_(n,row,o){ const s=sheet_(n); SH[n].forEach((k,j)=>{ if(o[k]!==undefined) s.getRange(row._row,j+1).setValue(o[k]); }); }
+function setting_(k,def){ const r=find_('Settings','key',k); return r?r.value:def; }
+function out_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function hex_(bytes){ return bytes.map(b=>('0'+(b&255).toString(16)).slice(-2)).join(''); }
+function sha_(s){ return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8)); }
+function rand_(n){ let s=''; while(s.length<n) s+=Utilities.getUuid().replace(/-/g,''); return s.slice(0,n); }
+function today_(){ return Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd'); }
+function addDays_(iso,d){ const t=new Date(iso+'T00:00:00'); t.setDate(t.getDate()+Number(d)); return Utilities.formatDate(t,'Asia/Kolkata','yyyy-MM-dd'); }
+function dstr_(v){ if(!v) return ''; if(v instanceof Date) return Utilities.formatDate(v,'Asia/Kolkata','yyyy-MM-dd'); return String(v); }
+function slow_(pwh,salt){ let h=pwh; for(let i=0;i<2000;i++) h=sha_(salt+':'+h); return h; }
+
+/* ---------- one-time setup ---------- */
+function setup(){
+  Object.keys(SH).forEach(sheet_);
+  if(!rows_('Plans').length){
+    add_('Plans',{id:'basic',name:'Basic',price:199,days:30,features:'All features · 1 month',payLink:'',active:'yes'});
+    add_('Plans',{id:'pro',name:'Pro',price:999,days:180,features:'All features · 6 months',payLink:'',active:'yes'});
+    add_('Plans',{id:'business',name:'Business',price:1799,days:365,features:'All features · 1 year · Priority support',payLink:'',active:'yes'});
+  }
+  if(!rows_('Settings').length){
+    [['appName','CASHFLOW'],['supportEmail',Session.getActiveUser().getEmail()],['supportPhone',''],['announcement',''],['trialDays','0'],['currency','INR']].forEach(r=>add_('Settings',{key:r[0],value:r[1]}));
+  }
+  ScriptApp.getProjectTriggers().forEach(t=>ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('checkPendingOrders').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('cleanup').timeBased().everyDays(1).create();
+}
+
+/* ---------- router ---------- */
+function doGet(e){ return out_({ok:true,app:'CASHFLOW server'}); }
+function doPost(e){
+  let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
+  const pub={config,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
+  const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject};
+  const lock=LockService.getScriptLock();
+  try{
+    lock.waitLock(25000);
+    if(pub[b.action]) return out_(pub[b.action](b));
+    if(adm[b.action]){ if(b.action!=='adminLogin'&&!adminOk_(b.adminToken)) return out_({ok:false,error:'Admin session expired',relogin:true}); return out_(adm[b.action](b)); }
+    return out_({ok:false,error:'Unknown action'});
+  }catch(err){ return out_({ok:false,error:String(err.message||err)}); }
+  finally{ try{lock.releaseLock();}catch(x){} }
+}
+
+/* ---------- public config ---------- */
+function plans_(all){ return rows_('Plans').filter(p=>all||String(p.active).toLowerCase()!=='no').map(p=>({id:String(p.id),name:p.name,price:Number(p.price),days:Number(p.days),features:p.features,hasLink:!!p.payLink,active:String(p.active).toLowerCase()!=='no'})); }
+function config(){ return {ok:true,plans:plans_(),appName:setting_('appName','CASHFLOW'),supportEmail:setting_('supportEmail',''),supportPhone:setting_('supportPhone',''),announcement:setting_('announcement',''),auto:!!(P.getProperty('RAZORPAY_KEY_ID')&&P.getProperty('RAZORPAY_KEY_SECRET'))}; }
+
+/* ---------- accounts ---------- */
+function validEmail_(e){ return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e||''); }
+function session_(token){ if(!token) return null; const s=find_('Sessions','token',token); if(!s) return null; if(new Date(s.expires)<new Date()) return null; return find_('Users','email',s.email); }
+function newSession_(email){ const t=rand_(48); const exp=new Date(); exp.setDate(exp.getDate()+30); add_('Sessions',{token:t,email,expires:exp.toISOString()}); return t; }
+function sub_(u){ const end=dstr_(u.endDate); return {planId:u.planId,planName:u.planName,endDate:end,active:!!end&&end>=today_()&&String(u.blocked)!=='yes',blocked:String(u.blocked)==='yes'}; }
+function me_(u,token){ return Object.assign({ok:true,token,email:u.email,name:u.name,sub:sub_(u)},config()); }
+
+function signup(b){
+  const email=String(b.email||'').trim().toLowerCase(), name=String(b.name||'').trim().slice(0,60);
+  if(!validEmail_(email)) return {ok:false,error:'Enter a valid email'};
+  if(!name) return {ok:false,error:'Enter your name'};
+  if(!/^[a-f0-9]{64}$/.test(b.pwh||'')) return {ok:false,error:'Bad password data'};
+  if(find_('Users','email',email)) return {ok:false,error:'This email is already registered. Please login.'};
+  const salt=rand_(24); const u={email,name,salt,hash:slow_(b.pwh,salt),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString()};
+  const trial=Number(setting_('trialDays',0)); if(trial>0){ u.planId='trial'; u.planName='Free trial'; u.endDate=addDays_(today_(),trial); }
+  add_('Users',u);
+  return me_(find_('Users','email',email),newSession_(email));
+}
+function login(b){
+  const email=String(b.email||'').trim().toLowerCase(); const u=find_('Users','email',email);
+  if(!u) return {ok:false,error:'Wrong email or password'};
+  if(u.lockUntil&&new Date(u.lockUntil)>new Date()) return {ok:false,error:'Too many attempts. Try again after a few minutes.'};
+  if(slow_(b.pwh||'',u.salt)!==u.hash){ const f=Number(u.fails||0)+1; const o={fails:f}; if(f>=5){ const t=new Date(); t.setMinutes(t.getMinutes()+Math.min(60,5*(f-4))); o.lockUntil=t.toISOString(); } upd_('Users',u,o); return {ok:false,error:'Wrong email or password'}; }
+  if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
+  upd_('Users',u,{fails:0,lockUntil:'',lastLogin:new Date().toISOString()});
+  return me_(find_('Users','email',email),newSession_(email));
+}
+function status(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true}; return me_(u,b.token); }
+function logout(b){ const s=find_('Sessions','token',b.token||'#'); if(s) sheet_('Sessions').deleteRow(s._row); return {ok:true}; }
+function changePassword(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  if(slow_(b.oldPwh||'',u.salt)!==u.hash) return {ok:false,error:'Current password is wrong'};
+  const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt)}); return {ok:true}; }
+function forgotStart(b){ const email=String(b.email||'').trim().toLowerCase(); const u=find_('Users','email',email);
+  if(u){ const code=String(Math.floor(100000+Math.random()*900000)); CacheService.getScriptCache().put('otp:'+email,code,900);
+    MailApp.sendEmail({to:email,subject:setting_('appName','CASHFLOW')+' password reset code',htmlBody:'<p>Your password reset code is <b style="font-size:20px">'+code+'</b></p><p>It is valid for 15 minutes. If you did not ask for this, ignore this email.</p>'}); }
+  return {ok:true}; }
+function forgotFinish(b){ const email=String(b.email||'').trim().toLowerCase(); const c=CacheService.getScriptCache(); const code=c.get('otp:'+email);
+  if(!code||code!==String(b.code||'').trim()) return {ok:false,error:'Wrong or expired code'};
+  const u=find_('Users','email',email); if(!u) return {ok:false,error:'Account not found'};
+  const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt),fails:0,lockUntil:''}); c.remove('otp:'+email);
+  return me_(find_('Users','email',email),newSession_(email)); }
+
+/* ---------- buying ---------- */
+function buy(b){
+  const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const p=rows_('Plans').find(x=>String(x.id)===String(b.planId)&&String(x.active).toLowerCase()!=='no'); if(!p) return {ok:false,error:'Plan not available'};
+  const orderId='CF'+Date.now().toString(36).toUpperCase()+rand_(4).toUpperCase();
+  const o={orderId,email:u.email,planId:p.id,planName:p.name,amount:Number(p.price),status:'pending',created:new Date().toISOString()};
+  const kid=P.getProperty('RAZORPAY_KEY_ID'),ksec=P.getProperty('RAZORPAY_KEY_SECRET');
+  if(kid&&ksec){
+    const r=rzp_('post','payment_links',{amount:Math.round(Number(p.price)*100),currency:'INR',accept_partial:false,reference_id:orderId,
+      description:setting_('appName','CASHFLOW')+' '+p.name+' plan',customer:{name:u.name,email:u.email},notify:{email:false,sms:false},reminder_enable:false,
+      notes:{email:u.email,planId:String(p.id),orderId},callback_url:(b.returnUrl||(P.getProperty('APP_URL')||DEFAULT_APP_URL)||''),callback_method:'get'});
+    if(!r.short_url) return {ok:false,error:'Payment gateway error: '+((r.error&&r.error.description)||'unknown')};
+    o.mode='razorpay'; o.linkId=r.id; o.linkUrl=r.short_url;
+  } else {
+    if(!p.payLink) return {ok:false,error:'Payment link for this plan is not set yet. Contact support.'};
+    o.mode='manual'; o.linkUrl=p.payLink;
+  }
+  add_('Orders',o);
+  return {ok:true,orderId,payUrl:o.linkUrl,mode:o.mode};
+}
+function rzp_(method,path,payload){
+  const auth=Utilities.base64Encode(P.getProperty('RAZORPAY_KEY_ID')+':'+P.getProperty('RAZORPAY_KEY_SECRET'));
+  const opt={method,headers:{Authorization:'Basic '+auth},muteHttpExceptions:true,contentType:'application/json'}; if(payload) opt.payload=JSON.stringify(payload);
+  return JSON.parse(UrlFetchApp.fetch('https://api.razorpay.com/v1/'+path,opt).getContentText()||'{}');
+}
+/* verify one razorpay order against Razorpay itself (never trust the browser) */
+function settleOrder_(o){
+  if(o.status!=='pending'||o.mode!=='razorpay'||!o.linkId) return false;
+  const r=rzp_('get','payment_links/'+o.linkId);
+  if(r.status!=='paid'||Number(r.amount_paid)<Math.round(Number(o.amount)*100)||r.reference_id!==o.orderId) return false;
+  const pay=(r.payments&&r.payments[0]&&r.payments[0].payment_id)||'';
+  fulfil_(o,pay,'razorpay'); return true;
+}
+function fulfil_(o,paymentId,source){
+  const p=rows_('Plans').find(x=>String(x.id)===String(o.planId));
+  const key=issueKey_(o.email,o.planId,o.planName,p?Number(p.days):30,source,o.orderId);
+  upd_('Orders',o,{status:'paid',paymentId,paidOn:new Date().toISOString(),licenseKey:key});
+}
+function confirmLink(b){
+  const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const o=rows_('Orders').find(x=>x.linkId===b.linkId||x.orderId===b.orderId); if(!o||o.email!==u.email) return {ok:false,error:'Order not found'};
+  if(o.status==='paid') return {ok:true,paid:true,email:u.email};
+  return {ok:true,paid:settleOrder_(o),email:u.email};
+}
+function checkPendingOrders(){
+  const lock=LockService.getScriptLock(); if(!lock.tryLock(20000)) return;
+  try{ const cut=new Date(); cut.setDate(cut.getDate()-3);
+    rows_('Orders').filter(o=>o.status==='pending'&&o.mode==='razorpay'&&new Date(o.created)>cut).forEach(o=>{ try{settleOrder_(o);}catch(e){} });
+  } finally { lock.releaseLock(); }
+}
+
+/* ---------- keys ---------- */
+function newKey_(){ const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const b=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,Utilities.getUuid()+Utilities.getUuid()+Date.now());
+  let s=''; for(let i=0;i<20;i++) s+=A[(b[i]&255)%32]; return 'CF-'+s.match(/.{5}/g).join('-'); }
+function issueKey_(email,planId,planName,days,source,orderId){
+  const key=newKey_();
+  add_('Licenses',{key,email,planId,planName,days,created:new Date().toISOString(),status:'issued',activatedOn:'',source,orderId:orderId||''});
+  const app=setting_('appName','CASHFLOW'),url=(P.getProperty('APP_URL')||DEFAULT_APP_URL)||'';
+  MailApp.sendEmail({to:email,subject:'Your '+app+' activation key ('+planName+')',
+    htmlBody:'<div style="font-family:Arial,sans-serif;max-width:520px"><h2 style="color:#6c7cff">'+app+'</h2><p>Thank you! Your <b>'+planName+'</b> plan ('+days+' days) is ready.</p>'+
+    '<p>Your activation key:</p><p style="font-size:20px;font-weight:bold;letter-spacing:2px;background:#eef1fa;padding:14px;border-radius:10px;text-align:center">'+key+'</p>'+
+    '<p>Open '+(url?'<a href="'+url+'">'+app+'</a>':app)+', login with <b>'+email+'</b> and enter this key. It works only with this email.</p><p style="color:#888;font-size:12px">Keep this key private.</p></div>'});
+  return key;
+}
+function activate(b){
+  const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const key=String(b.key||'').trim().toUpperCase().replace(/\s+/g,'');
+  const fk='actfail:'+u.email, c=CacheService.getScriptCache(), fails=Number(c.get(fk)||0);
+  if(fails>=8) return {ok:false,error:'Too many wrong keys. Try again in 30 minutes.'};
+  const L=find_('Licenses','key',key);
+  if(!L||L.email.toLowerCase()!==u.email.toLowerCase()){ c.put(fk,String(fails+1),1800); return {ok:false,error:L?'This key belongs to a different email':'Invalid activation key'}; }
+  if(L.status==='revoked') return {ok:false,error:'This key has been cancelled. Contact support.'};
+  if(L.status==='active') return {ok:false,error:'This key is already used.'};
+  const cur=dstr_(u.endDate); const start=(cur&&cur>=today_())?cur:today_(); const end=addDays_(start,L.days);
+  upd_('Licenses',L,{status:'active',activatedOn:new Date().toISOString()});
+  upd_('Users',u,{planId:L.planId,planName:L.planName,endDate:end});
+  return me_(find_('Users','email',u.email),b.token);
+}
+
+/* ---------- admin ---------- */
+function adminOk_(t){ return t&&CacheService.getScriptCache().get('adm:'+t)==='1'; }
+function adminLogin(b){
+  const c=CacheService.getScriptCache(), f=Number(c.get('admfail')||0); if(f>=5) return {ok:false,error:'Locked for 15 minutes'};
+  const pw=P.getProperty('ADMIN_PASSWORD'); if(!pw||pw.length<10) return {ok:false,error:'Set ADMIN_PASSWORD (10+ characters) in Script properties first'};
+  if(b.password!==pw){ c.put('admfail',String(f+1),900); return {ok:false,error:'Wrong admin password'}; }
+  const t=rand_(48); c.put('adm:'+t,'1',21600); return {ok:true,adminToken:t};
+}
+function adminData(){
+  const users=rows_('Users').map(u=>({email:u.email,name:u.name,created:dstr_(u.created).slice(0,10),lastLogin:dstr_(u.lastLogin).slice(0,10),sub:sub_(u)}));
+  const orders=rows_('Orders').map(o=>({orderId:o.orderId,email:o.email,planName:o.planName,amount:o.amount,mode:o.mode,status:o.status,created:dstr_(o.created).slice(0,16),paidOn:dstr_(o.paidOn).slice(0,10)})).reverse();
+  const keys=rows_('Licenses').map(l=>({key:l.key,email:l.email,planName:l.planName,days:l.days,status:l.status,created:dstr_(l.created).slice(0,10),source:l.source})).reverse();
+  const settings={}; rows_('Settings').forEach(r=>settings[r.key]=r.value);
+  const plans=rows_('Plans').map(p=>({id:String(p.id),name:p.name,price:Number(p.price),days:Number(p.days),features:p.features,payLink:p.payLink,active:String(p.active).toLowerCase()!=='no'}));
+  return {ok:true,users,orders,keys,settings,plans,auto:config().auto};
+}
+function adminSavePlans(b){
+  const s=sheet_('Plans'); if(s.getLastRow()>1) s.getRange(2,1,s.getLastRow()-1,SH.Plans.length).clearContent();
+  (b.plans||[]).forEach(p=>add_('Plans',{id:String(p.id||'').replace(/[^a-z0-9_-]/gi,'').toLowerCase()||rand_(6),name:p.name,price:Number(p.price)||0,days:Number(p.days)||30,features:p.features||'',payLink:p.payLink||'',active:p.active?'yes':'no'}));
+  return adminData();
+}
+function adminSaveSettings(b){ Object.keys(b.settings||{}).forEach(k=>{ const r=find_('Settings','key',k); if(r) upd_('Settings',r,{value:b.settings[k]}); else add_('Settings',{key:k,value:b.settings[k]}); }); return adminData(); }
+function adminIssue(b){ const email=String(b.email||'').trim().toLowerCase(); if(!validEmail_(email)) return {ok:false,error:'Invalid email'};
+  const p=rows_('Plans').find(x=>String(x.id)===String(b.planId)); if(!p) return {ok:false,error:'Choose a plan'};
+  issueKey_(email,p.id,p.name,Number(b.days)||Number(p.days),'admin',''); return adminData(); }
+function adminExtend(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'};
+  const cur=dstr_(u.endDate); const start=(cur&&cur>=today_())?cur:today_(); upd_('Users',u,{endDate:addDays_(start,Number(b.days)||0),planName:u.planName||'Manual',planId:u.planId||'manual'}); return adminData(); }
+function adminBlock(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'}; upd_('Users',u,{blocked:b.blocked?'yes':''}); return adminData(); }
+function adminRevoke(b){ const L=find_('Licenses','key',b.key); if(!L) return {ok:false,error:'Key not found'}; upd_('Licenses',L,{status:'revoked'}); return adminData(); }
+function adminApprove(b){ const o=find_('Orders','orderId',b.orderId); if(!o||o.status!=='pending') return {ok:false,error:'Order not pending'}; fulfil_(o,String(b.paymentRef||'manual'),'manual'); return adminData(); }
+function adminReject(b){ const o=find_('Orders','orderId',b.orderId); if(!o) return {ok:false,error:'Order not found'}; upd_('Orders',o,{status:'rejected'}); return adminData(); }
+
+/* ---------- housekeeping ---------- */
+function cleanup(){ const s=sheet_('Sessions'), v=rows_('Sessions'); for(let i=v.length-1;i>=0;i--) if(new Date(v[i].expires)<new Date()) s.deleteRow(v[i]._row); }
