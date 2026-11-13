@@ -60,8 +60,8 @@ function setup(){
 function doGet(e){ return out_({ok:true,app:'CASHFLOW server'}); }
 function doPost(e){
   let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
-  const pub={config,submitUtr,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
-  const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject};
+  const pub={config,submitUtr,setPassword,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
+  const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject,adminStock};
   const lock=LockService.getScriptLock();
   try{
     lock.waitLock(25000);
@@ -81,7 +81,7 @@ function validEmail_(e){ return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e||''); }
 function session_(token){ if(!token) return null; const s=find_('Sessions','token',token); if(!s) return null; if(new Date(s.expires)<new Date()) return null; return find_('Users','email',s.email); }
 function newSession_(email){ const t=rand_(48); const exp=new Date(); exp.setDate(exp.getDate()+30); add_('Sessions',{token:t,email,expires:exp.toISOString()}); return t; }
 function sub_(u){ const end=dstr_(u.endDate); return {planId:u.planId,planName:u.planName,endDate:end,active:!!end&&end>=today_()&&String(u.blocked)!=='yes',blocked:String(u.blocked)==='yes'}; }
-function me_(u,token){ return Object.assign({ok:true,token,email:u.email,name:u.name,sub:sub_(u)},config()); }
+function me_(u,token){ return Object.assign({ok:true,token,email:u.email,name:u.name,google:String(u.google)==='yes',sub:sub_(u)},config()); }
 
 function signup(b){
   const email=String(b.email||'').trim().toLowerCase(), name=String(b.name||'').trim().slice(0,60);
@@ -93,8 +93,8 @@ function signup(b){
   if(find_('Users','email',email)) return {ok:false,error:'This email is already registered. Please login.'};
   const salt=rand_(24); const u={email,name,salt,hash:slow_(b.pwh,salt),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:"'"+phone};
   const trial=Number(setting_('trialDays',0)); if(trial>0){ u.planId='trial'; u.planName='Free trial'; u.endDate=addDays_(today_(),trial); }
-  add_('Users',u);
-  return me_(find_('Users','email',email),newSession_(email));
+  u.dataKey=rand_(48); add_('Users',u);
+  return Object.assign(me_(find_('Users','email',email),newSession_(email)),{dataKey:u.dataKey});
 }
 function login(b){
   const email=String(b.email||'').trim().toLowerCase(); const u=find_('Users','email',email);
@@ -102,8 +102,9 @@ function login(b){
   if(u.lockUntil&&new Date(u.lockUntil)>new Date()) return {ok:false,error:'Too many attempts. Try again after a few minutes.'};
   if(slow_(b.pwh||'',u.salt)!==u.hash){ const f=Number(u.fails||0)+1; const o={fails:f}; if(f>=5){ const t=new Date(); t.setMinutes(t.getMinutes()+Math.min(60,5*(f-4))); o.lockUntil=t.toISOString(); } upd_('Users',u,o); return {ok:false,error:'Wrong email or password'}; }
   if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
-  upd_('Users',u,{fails:0,lockUntil:'',lastLogin:new Date().toISOString()});
-  return me_(find_('Users','email',email),newSession_(email));
+  const o={fails:0,lockUntil:'',lastLogin:new Date().toISOString()}; if(!u.dataKey) o.dataKey=rand_(48);
+  upd_('Users',u,o); const v=find_('Users','email',email);
+  return Object.assign(me_(v,newSession_(email)),{dataKey:String(v.dataKey)});
 }
 function status(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true}; return me_(u,b.token); }
 function logout(b){ const s=find_('Sessions','token',b.token||'#'); if(s) sheet_('Sessions').deleteRow(s._row); return {ok:true}; }
@@ -117,8 +118,12 @@ function forgotStart(b){ const email=String(b.email||'').trim().toLowerCase(); c
 function forgotFinish(b){ const email=String(b.email||'').trim().toLowerCase(); const c=CacheService.getScriptCache(); const code=c.get('otp:'+email);
   if(!code||code!==String(b.code||'').trim()) return {ok:false,error:'Wrong or expired code'};
   const u=find_('Users','email',email); if(!u) return {ok:false,error:'Account not found'};
-  const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt),fails:0,lockUntil:''}); c.remove('otp:'+email);
-  return me_(find_('Users','email',email),newSession_(email)); }
+  const salt=rand_(24); const o={salt,hash:slow_(b.newPwh,salt),fails:0,lockUntil:''}; if(!u.dataKey) o.dataKey=rand_(48); upd_('Users',u,o); c.remove('otp:'+email);
+  const v=find_('Users','email',email); return Object.assign(me_(v,newSession_(email)),{dataKey:String(v.dataKey)}); }
+function setPassword(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  if(!/^[a-f0-9]{64}$/.test(b.newPwh||'')) return {ok:false,error:'Bad password data'};
+  if(String(u.google)!=='yes'&&slow_(b.oldPwh||'',u.salt)!==u.hash) return {ok:false,error:'Current password is wrong'};
+  const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt),fails:0,lockUntil:''}); return {ok:true}; }
 
 /* ---------- Google sign-in ---------- */
 function normPhone_(v){ let p=String(v||'').replace(/[^0-9+]/g,''); if(/^0[6-9]\d{9}$/.test(p)) p=p.slice(1); if(/^[6-9]\d{9}$/.test(p)) return '+91'+p; if(/^91[6-9]\d{9}$/.test(p)) return '+'+p; return /^\+\d{10,15}$/.test(p)?p:''; }
@@ -211,8 +216,11 @@ function submitUtr(b){
 function newKey_(){ const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const b=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,Utilities.getUuid()+Utilities.getUuid()+Date.now());
   let s=''; for(let i=0;i<20;i++) s+=A[(b[i]&255)%32]; return 'CF-'+s.match(/.{5}/g).join('-'); }
 function issueKey_(email,planId,planName,days,source,orderId){
-  const key=newKey_();
-  add_('Licenses',{key,email,planId,planName,days,created:new Date().toISOString(),status:'issued',activatedOn:'',source,orderId:orderId||''});
+  const lock=LockService.getScriptLock(); lock.waitLock(20000); let key;
+  try{ const st=rows_('Licenses').find(l=>l.status==='stock'&&String(l.planId)===String(planId)&&Number(l.days)===Number(days));
+    if(st){ key=st.key; upd_('Licenses',st,{email,status:'issued',created:new Date().toISOString(),source,orderId:orderId||''}); }
+    else { key=newKey_(); add_('Licenses',{key,email,planId,planName,days,created:new Date().toISOString(),status:'issued',activatedOn:'',source,orderId:orderId||''}); }
+  } finally { lock.releaseLock(); }
   const app=setting_('appName','CASHFLOW'),url=(P.getProperty('APP_URL')||DEFAULT_APP_URL)||'';
   MailApp.sendEmail({to:email,subject:'Your '+app+' activation key ('+planName+')',
     htmlBody:'<div style="font-family:Arial,sans-serif;max-width:520px"><h2 style="color:#6c7cff">'+app+'</h2><p>Thank you! Your <b>'+planName+'</b> plan ('+days+' days) is ready.</p>'+
@@ -265,6 +273,10 @@ function adminIssue(b){ let email=String(b.email||'').trim().toLowerCase();
 function adminExtend(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'};
   const cur=dstr_(u.endDate); const start=(cur&&cur>=today_())?cur:today_(); upd_('Users',u,{endDate:addDays_(start,Number(b.days)||0),planName:u.planName||'Manual',planId:u.planId||'manual'}); return adminData(); }
 function adminBlock(b){ const u=find_('Users','email',b.email); if(!u) return {ok:false,error:'User not found'}; upd_('Users',u,{blocked:b.blocked?'yes':''}); return adminData(); }
+function adminStock(b){ const p=rows_('Plans').find(x=>String(x.id)===String(b.planId)); if(!p) return {ok:false,error:'Choose a plan'};
+  const n=Math.max(1,Math.min(200,Number(b.count)||0)); const s=sheet_('Licenses'); const now=new Date().toISOString();
+  const rows=[]; for(let i=0;i<n;i++){ const o={key:newKey_(),email:'',planId:p.id,planName:p.name,days:Number(p.days),created:now,status:'stock',activatedOn:'',source:'stock',orderId:''}; rows.push(SH.Licenses.map(k=>o[k]===undefined?'':o[k])); }
+  s.getRange(s.getLastRow()+1,1,rows.length,rows[0].length).setValues(rows); return adminData(); }
 function adminRevoke(b){ const L=find_('Licenses','key',b.key); if(!L) return {ok:false,error:'Key not found'}; upd_('Licenses',L,{status:'revoked'}); return adminData(); }
 function adminApprove(b){ const o=find_('Orders','orderId',b.orderId); if(!o||o.status!=='pending') return {ok:false,error:'Order not pending'}; fulfil_(o,String(b.paymentRef||o.paymentId||'manual'),'manual'); return adminData(); }
 function adminReject(b){ const o=find_('Orders','orderId',b.orderId); if(!o) return {ok:false,error:'Order not found'}; upd_('Orders',o,{status:'rejected'}); return adminData(); }

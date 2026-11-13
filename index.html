@@ -2,10 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CASHFLOW · Smart Money</title>
 <meta name="theme-color" content="#0f1220">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CASHFLOW">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -52,6 +58,13 @@ main{margin-left:230px;flex:1;padding:22px 26px 90px;max-width:1400px}
 .acc .n{font-size:16px;font-weight:700;margin-top:2px}
 .acc .b{font-size:22px;font-weight:800}
 .acc .m{font-size:11px;opacity:.9;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+*{-webkit-tap-highlight-color:transparent}button,a,.acc{touch-action:manipulation}
+button:active{transform:scale(.97)}.acc{cursor:pointer;transition:transform .12s}.acc:active{transform:scale(.985)}
+html{scroll-behavior:smooth}body{overscroll-behavior-y:contain}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px}.chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:6px 6px 6px 12px;font-size:13px}
+.chip button{background:none;border:none;color:var(--muted);font-size:14px;padding:0 4px;cursor:pointer}.chip button:hover{color:var(--text)}
+.stmt-row{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.stmt-row>div{flex:1;min-width:140px}
+#installBtn{display:none}
 .acc .acts{position:absolute;top:10px;right:10px;display:flex;gap:4px}
 .acc .acts button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:4px 7px;font-size:12px}
 .bar{height:6px;background:rgba(255,255,255,.25);border-radius:6px;overflow:hidden;margin-top:6px}
@@ -237,6 +250,7 @@ th,td{padding:9px 5px;font-size:12px}
         <button class="btn red" onclick="openTxn('expense')">− Expense</button>
         <button class="btn green" onclick="openTxn('income')">+ Income</button>
         <button class="btn" onclick="openTxn('transfer')">⇄ Transfer</button>
+        <button class="btn ghost" id="installBtn" onclick="installApp()">📲 Install app</button>
       </div>
     </div>
 
@@ -294,6 +308,16 @@ th,td{padding:9px 5px;font-size:12px}
         <div class="card"><h3>Credit card utilization</h3><div id="utilList"></div></div>
       </div>
       <div class="card" style="margin-top:14px"><h3>Account-wise summary (selected month)</h3><div id="accSummary" style="overflow:auto"></div></div>
+      <div class="card" style="margin-top:14px" id="stmtCard"><h3>📄 Statements &amp; downloads</h3>
+        <div class="stmt-row">
+          <div><label>Account</label><select id="stAcc"></select></div>
+          <div><label>From</label><input type="date" id="stFrom"></div>
+          <div><label>To</label><input type="date" id="stTo"></div>
+        </div>
+        <div class="row" style="margin-top:12px"><button class="btn" onclick="stmtPDF()">⬇ PDF</button><button class="btn green" onclick="stmtXLS()">⬇ Excel</button>
+          <button class="btn ghost sm" onclick="stRange('month')">This month</button><button class="btn ghost sm" onclick="stRange('last')">Last month</button><button class="btn ghost sm" onclick="stRange('fy')">This FY</button><button class="btn ghost sm" onclick="stRange('all')">All time</button></div>
+        <p style="color:var(--muted);font-size:12px;margin-top:8px">One account = its statement with opening, running and closing balance. "All accounts (combined)" = every transaction in one list. "All accounts (separate)" = each account's statement one after another (Excel: one sheet per account).</p>
+      </div>
     </section>
 
     <!-- BACKUP -->
@@ -321,7 +345,7 @@ th,td{padding:9px 5px;font-size:12px}
             <input type="file" id="impFile" accept=".json" style="display:none" onchange="importJSON(event)">
           </div>
         </div>
-        <div class="card" id="advCard">
+        <div class="card">
           <h3>🛠 Advanced: link via Apps Script</h3>
           <p style="color:var(--muted);margin-bottom:10px">Every user links <b>their own</b> Google Sheet. Your accounts and transactions appear there as tables, and the same data opens on phone and PC.</p>
           <div class="form">
@@ -364,12 +388,12 @@ th,td{padding:9px 5px;font-size:12px}
         <div class="card">
           <h3>🔐 Security</h3>
           <div class="form">
-            <div><label>Current password</label><input id="cpOld" type="password"></div>
+            <div id="cpOldBox"><label>Current password</label><input id="cpOld" type="password"></div>
             <div><label>New password</label><input id="cpNew" type="password"></div>
             <div><label>Auto-lock after inactivity</label><select id="setLock"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="0">Never</option></select></div>
           </div>
           <div class="row" style="margin-top:12px"><button class="btn" onclick="changePass()">Change password</button><button class="btn ghost" onclick="saveLock()">Save auto-lock</button></div>
-          <p style="color:var(--muted);font-size:12px;margin-top:10px">If you reset a forgotten password, data on this device is re-loaded from your Google Sheet, so keep it linked.</p>
+          <p style="color:var(--muted);font-size:12px;margin-top:10px" id="cpHint">Login ID is your email. You stay logged in on this device until you press Logout.</p>
         </div>
         <div class="card">
           <h3>🎫 Subscription</h3>
@@ -378,11 +402,11 @@ th,td{padding:9px 5px;font-size:12px}
         </div>
         <div class="card">
           <h3>🏷️ Categories</h3>
-          <div class="form">
-            <div class="full"><label>Expense categories (comma separated)</label><textarea id="setExpCat" rows="4"></textarea></div>
-            <div class="full"><label>Income categories (comma separated)</label><textarea id="setIncCat" rows="2"></textarea></div>
-          </div>
-          <button class="btn" style="margin-top:12px" onclick="saveCats()">Save categories</button>
+          <label>Expense categories</label><div class="chips" id="catExp"></div>
+          <div class="row"><input id="newExp" placeholder="New expense category" style="flex:1" onkeydown="if(event.key==='Enter')addCat('expense')"><button class="btn sm" onclick="addCat('expense')">+ Add</button></div>
+          <label style="margin-top:14px;display:block">Income categories</label><div class="chips" id="catInc"></div>
+          <div class="row"><input id="newInc" placeholder="New income category" style="flex:1" onkeydown="if(event.key==='Enter')addCat('income')"><button class="btn sm" onclick="addCat('income')">+ Add</button></div>
+          <p style="color:var(--muted);font-size:12px;margin-top:8px">Tap ✎ to rename (old entries update too) or ✕ to delete.</p>
         </div>
         <div class="card">
           <h3>⚠️ Danger zone</h3>
@@ -408,6 +432,9 @@ th,td{padding:9px 5px;font-size:12px}
    <button onclick="$('quick').classList.remove('show');openTxn('income')"><span>➕</span>Income</button>
    <button onclick="$('quick').classList.remove('show');openTxn('transfer')"><span>⇄</span>Transfer / Pay</button>
   </div></div></div>
+<div class="more" id="accSheet" onclick="if(event.target===this)this.classList.remove('show')"><div class="sheet"><div class="grip"></div>
+  <div style="text-align:center;margin-bottom:10px"><b id="asName"></b><div style="color:var(--muted);font-size:13px" id="asBal"></div></div>
+  <div class="gridm" id="asBtns"></div></div></div>
 <div class="more" id="more" onclick="if(event.target===this)this.classList.remove('show')"><div class="sheet"><div class="grip"></div>
   <div class="gridm">
    <button onclick="mgo('transactions')"><span>🧾</span>Transactions</button>
@@ -486,7 +513,7 @@ th,td{padding:9px 5px;font-size:12px}
    API_URL          : your CASHFLOW server (Apps Script Web App URL)
    GOOGLE_CLIENT_ID : OAuth Web Client ID (one-click Google Sheet for every user)   */
 const API_URL = 'https://script.google.com/macros/s/AKfycbzuWDXN3G9RaT5DgtDm7tUxPXnVVaH7uYqEd5ltQgtfzxw3-p9nFnfgaaeuUpDOoyU7/exec';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
-const GOOGLE_CLIENT_ID = '135707821463-0v5s98g9acvnff859nafu64ltvvni0vc.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '';
 const APP_VERSION = '3.0';
 /* ================= DATA ================= */
 const KEY='agac_money_v1';
@@ -505,8 +532,8 @@ const DEF_EXP=['Food & Dining','Groceries','Fuel','Travel','Shopping','Bills & U
 const DEF_INC=['Salary','Business income','Interest','Dividend','Rent received','Refund / Cashback','Gift received','Other'];
 
 let S=null;let SES=null; // SES={user,key}
-function blank(){return{accounts:[],txns:[],cats:{expense:DEF_EXP.slice(),income:DEF_INC.slice()},settings:{name:'',theme:localStorage.getItem('wr_theme')||'dark',cur:'₹',syncUrl:'',syncKey:'',syncAuto:'1',lockMin:'10'},updated:Date.now()}}
-function normalize(d){const b=blank();d=d&&d.accounts?d:b;d.txns=d.txns||[];d.cats=d.cats||b.cats;d.settings=Object.assign(b.settings,d.settings||{});return d}
+function blank(){return{accounts:[],txns:[],cats:{expense:DEF_EXP.slice(),income:DEF_INC.slice()},settings:{name:'',theme:localStorage.getItem('wr_theme')||'dark',cur:'₹',syncUrl:'',syncKey:'',syncAuto:'1',lockMin:'0'},updated:Date.now()}}
+function normalize(d){const b=blank();d=d&&d.accounts?d:b;if(d.settings&&!d.settings.lockSet&&d.settings.lockMin==='10')d.settings.lockMin='0';d.txns=d.txns||[];d.cats=d.cats||b.cats;d.settings=Object.assign(b.settings,d.settings||{});return d}
 /* ---- crypto ---- */
 const te=new TextEncoder(),td=new TextDecoder();
 const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u)));
@@ -514,7 +541,7 @@ const ub64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
 async function pbk(pw,salt,usage){const base=await crypto.subtle.importKey('raw',te.encode(pw),'PBKDF2',false,['deriveBits','deriveKey']);
   if(usage==='bits')return b64(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,256));
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},true,['encrypt','decrypt'])}
 async function encObj(key,obj){const iv=rnd(12);const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,te.encode(JSON.stringify(obj)));return{iv:b64(iv),ct:b64(ct)}}
 async function decObj(key,e){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub64(e.iv)},key,ub64(e.ct));return JSON.parse(td.decode(pt))}
 const USERS='wr_users';
@@ -539,13 +566,27 @@ const subActive=sub=>!!(sub&&sub.endDate&&sub.endDate>=today()&&!sub.blocked);
 /* ---- auth ---- */
 function authTab(t){document.querySelectorAll('#authTabs button').forEach(b=>b.classList.toggle('on',b.dataset.a===t));$('authLogin').style.display=t==='login'?'':'none';$('authSignup').style.display=t==='signup'?'':'none';$('authForgot').style.display=t==='forgot'?'':'none';$('lErr').textContent=$('sErr').textContent=$('fErr').textContent=''}
 const strong=p=>p.length>=8&&/\d/.test(p)&&/[a-zA-Z]/.test(p);
-async function openLocal(email,pw,me,fresh){
+async function openLocal(email,secrets,me,fresh){
+  secrets=(Array.isArray(secrets)?secrets:[secrets]).filter(Boolean);
   const U=getUsers();let rec=U[email];
-  if(!rec||fresh){rec={ks:b64(rnd(16)),as:b64(rnd(16))};}
-  rec.auth=await pbk(pw,ub64(rec.as),'bits');rec.name=me.name;rec.sub=me.sub;rec.checked=Date.now();U[email]=rec;setUsers(U);
-  const key=await pbk(pw,ub64(rec.ks),'key');const raw=fresh?null:localStorage.getItem(dataKey(email));
-  let data=null;if(raw){try{data=await decObj(key,JSON.parse(raw))}catch(e){if(!confirm('Data on this device was locked with an older password.\n\nOK = clear it here and load from your Google Sheet'))throw new Error('Could not open local data');rec.ks=b64(rnd(16));setUsers(U);return openLocal(email,pw,me,true)}}
-  SES={user:email,key:await pbk(pw,ub64(rec.ks),'key'),token:me.token};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;save(true);
+  if(!rec||fresh){rec=Object.assign(rec||{},{ks:rec&&rec.ks||b64(rnd(16)),as:rec&&rec.as||b64(rnd(16))});}
+  rec.name=me.name;rec.sub=me.sub;rec.checked=Date.now();U[email]=rec;setUsers(U);
+  const key=await pbk(secrets[0],ub64(rec.ks),'key');const raw=localStorage.getItem(dataKey(email));
+  let data=null;
+  if(raw){for(let i=0;i<secrets.length&&!data;i++){try{data=await decObj(i?await pbk(secrets[i],ub64(rec.ks),'key'):key,JSON.parse(raw))}catch(e){}}
+    if(!data&&!fresh)toast('Old data on this device could not be opened. Load it from your Google Sheet in Backup.')}
+  SES={user:email,key,token:me.token,dk:!!me.dataKey};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;save(true);
+  await rememberSes();
+}
+async function rememberSes(){try{const k=b64(await crypto.subtle.exportKey('raw',SES.key));localStorage.setItem('wr_ses',JSON.stringify({email:SES.user,token:SES.token,k,name:ME.name,sub:ME.sub,google:!!ME.google,dk:SES.dk}))}catch(e){}}
+async function restoreSes(){
+  let r;try{r=JSON.parse(localStorage.getItem('wr_ses')||'null')}catch(e){}if(!r||!r.k||!r.email)return false;
+  try{const key=await crypto.subtle.importKey('raw',ub64(r.k),{name:'AES-GCM'},true,['encrypt','decrypt']);
+    const raw=localStorage.getItem(dataKey(r.email));const data=raw?await decObj(key,JSON.parse(raw)):null;
+    SES={user:r.email,key,token:r.token,dk:r.dk};ME={ok:true,token:r.token,email:r.email,name:r.name,sub:r.sub,google:r.google};S=normalize(data);
+    startApp();
+    api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
+    return true}catch(e){localStorage.removeItem('wr_ses');return false}
 }
 
 function normPhone(v){let p=String(v||'').replace(/[^0-9+]/g,'');if(/^0[6-9]\d{9}$/.test(p))p=p.slice(1);if(/^[6-9]\d{9}$/.test(p))return'+91'+p;if(/^91[6-9]\d{9}$/.test(p))return'+'+p;if(/^\+\d{10,15}$/.test(p))return p;return''}
@@ -567,11 +608,13 @@ async function googleAuth(idToken,phone){
 }
 function googleFinish(){const p=normPhone($('gPhone').value);if(!p)return $('gErr').textContent='Enter your 10-digit mobile number';$('gBtn').disabled=true;googleAuth(G_TOK,p).finally(()=>$('gBtn').disabled=false)}
 async function afterAuth(me,email,pw,fresh){
-  applyCfg(me);await openLocal(email,pw,me,fresh);startApp();
+  applyCfg(me);await openLocal(email,me.dataKey?[me.dataKey,pw]:[pw],me,fresh);startApp();
+  if(me.dataKey&&pw&&pw!==me.dataKey)wrapDk(email,pw,me.dataKey).catch(()=>{});
   if(!subActive(me.sub))openGate(false);
   handleReturn();
-  if(!S.settings.sheetId&&GOOGLE_CLIENT_ID)setTimeout(()=>{if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
+  const gk='wr_gask_'+email;if(!S.settings.sheetId&&GOOGLE_CLIENT_ID&&!localStorage.getItem(gk)&&!S.accounts.length)setTimeout(()=>{localStorage.setItem(gk,'1');if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
+async function wrapDk(email,pw,dk){const U=getUsers(),rec=U[email];if(!rec)return;rec.ws=rec.ws||b64(rnd(16));rec.wk=await encObj(await pbk(pw,ub64(rec.ws),'key'),{dk});setUsers(U)}
 async function doSignup(){
   const name=$('sName').value.trim(),email=$('sUser').value.trim().toLowerCase(),p=$('sPass').value,p2=$('sPass2').value,phone=normPhone($('sPhone').value);const E=m=>$('sErr').textContent=m;
   if(!name)return E('Enter your name');if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email))return E('Enter a valid email');if(!phone)return E('Enter your 10-digit mobile number');
@@ -586,14 +629,15 @@ async function doLogin(){
   $('lBtn').disabled=true;$('lBtn').textContent='Checking…';
   try{let me;try{me=await api('login',{email,pwh:await pwHash(email,p)})}
     catch(net){// offline: allow only if this device knows the user and plan is still valid
-      const rec=getUsers()[email];if(rec&&rec.auth&&await pbk(p,ub64(rec.as),'bits')===rec.auth&&subActive(rec.sub)&&Date.now()-rec.checked<7*864e5){me={ok:true,offline:true,name:rec.name,sub:rec.sub,token:''}}else return E('No internet connection')}
+      const rec=getUsers()[email];let dk=null;if(rec&&rec.wk){try{dk=(await decObj(await pbk(p,ub64(rec.ws),'key'),rec.wk)).dk}catch(x){}}
+      if(dk&&subActive(rec.sub)&&Date.now()-rec.checked<15*864e5){me={ok:true,offline:true,name:rec.name,sub:rec.sub,token:'',dataKey:dk}}else return E('No internet connection')}
     if(!me.ok)return E(me.error);await afterAuth(me,email,p,false);if(me.offline)toast('Offline mode · changes sync when you are back online')}
   catch(e){E(e.message)}finally{$('lBtn').disabled=false;$('lBtn').textContent='Login';$('lPass').value=''}
 }
 async function forgotSend(){const e=$('fEmail').value.trim().toLowerCase();if(!e)return $('fErr').textContent='Enter your email';$('fSend').disabled=true;try{await api('forgotStart',{email:e});$('fErr').textContent='';toast('If this email is registered, a code was sent')}catch(x){$('fErr').textContent='No internet connection'}finally{setTimeout(()=>$('fSend').disabled=false,30000)}}
 async function forgotDone(){const email=$('fEmail').value.trim().toLowerCase(),code=$('fCode').value.trim(),p=$('fPass').value;const E=m=>$('fErr').textContent=m;
   if(!strong(p))return E('Password needs 8+ characters with letters and a number');$('fBtn').disabled=true;
-  try{const me=await api('forgotFinish',{email,code,newPwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,true);toast('Password reset ✓ Load your data from Google Sheet')}catch(x){E(x.message)}finally{$('fBtn').disabled=false;$('fPass').value=''}}
+  try{const me=await api('forgotFinish',{email,code,newPwh:await pwHash(email,p)});if(!me.ok)return E(me.error);await afterAuth(me,email,p,!me.dataKey);toast('Password reset ✓')}catch(x){E(x.message)}finally{$('fBtn').disabled=false;$('fPass').value=''}}
 /* ---- subscription gate ---- */
 function openGate(canClose){
   const me=ME||{};const sub=me.sub||{};const act=subActive(sub);
@@ -643,15 +687,17 @@ function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)retur
   if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
   if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
 function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
-function logout(){clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+function logout(){localStorage.removeItem('wr_ses');clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
 let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
 async function changePass(){
   const o=$('cpOld').value,n=$('cpNew').value;if(!strong(n))return toast('New password: 8+ characters with letters and a number');
-  try{const r=await api('changePassword',{token:SES.token,oldPwh:await pwHash(SES.user,o),newPwh:await pwHash(SES.user,n)});if(!r.ok)return toast(r.error);
-    const U=getUsers(),rec=U[SES.user];rec.as=b64(rnd(16));rec.ks=b64(rnd(16));rec.auth=await pbk(n,ub64(rec.as),'bits');SES.key=await pbk(n,ub64(rec.ks),'key');setUsers(U);save(true);$('cpOld').value=$('cpNew').value='';toast('Password changed')}
+  const g=ME&&ME.google;if(!g&&!o)return toast('Enter your current password');
+  try{const r=await api(g?'setPassword':'changePassword',{token:SES.token,oldPwh:await pwHash(SES.user,o),newPwh:await pwHash(SES.user,n)});if(!r.ok)return toast(r.error);
+    if(!SES.dk){const U=getUsers(),rec=U[SES.user];rec.ks=b64(rnd(16));SES.key=await pbk(n,ub64(rec.ks),'key');setUsers(U);save(true);rememberSes()}
+    $('cpOld').value=$('cpNew').value='';toast(g?'Password set ✓ Now you can also login with '+SES.user+' + password':'Password changed')}
   catch(e){toast('No internet connection')}}
-function saveLock(){S.settings.lockMin=$('setLock').value;save(true);armLock();toast('Auto-lock saved')}
+function saveLock(){S.settings.lockSet='1';S.settings.lockMin=$('setLock').value;save(true);armLock();toast('Auto-lock saved')}
 function deleteMe(){if(!confirm('Delete your CASHFLOW login and all its data from this device? Your Google Sheet is not touched.'))return;if(!confirm('Final confirmation: remove "'+SES.user+'" from this device?'))return;const U=getUsers();delete U[SES.user];setUsers(U);localStorage.removeItem(dataKey(SES.user));logout();toast('Removed from this device')}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const $=id=>document.getElementById(id);
@@ -796,7 +842,7 @@ function accCard(a){
     extra=p?`<div class="bar"><i style="width:${paid}%"></i></div><div class="m" style="margin-top:6px"><span>${paid.toFixed(0)}% repaid of ${fmt(p)}</span><span>${a.end?'Ends '+dfmt(a.end):''}</span></div>`:''}
   else if(a.type==='invest'){meta=`<span>${esc(a.invType||'')}</span><span>${a.rate?a.rate+'% ':''}${a.mature?'· Matures '+dfmt(a.mature):''}</span>`}
   else meta=`<span>${esc(a.bank||'')}</span><span>${a.last4?'••'+esc(a.last4):''}</span>`;
-  return`<div class="acc" style="background:linear-gradient(135deg,${col},${shade(col,-35)});${a.archived?'opacity:.5':''}">
+  return`<div class="acc" onclick="if(!event.target.closest('.acts'))accSheet('${a.id}')" style="background:linear-gradient(135deg,${col},${shade(col,-35)});${a.archived?'opacity:.5':''}">
    <div class="acts">${['invest','locker','cash','other','wallet','bank'].includes(a.type)?`<button title="Update value" onclick="openVal('${a.id}')">↻</button>`:''}<button title="Transactions" onclick="showAccTx('${a.id}')">🧾</button><button title="Edit" onclick="openAcc('${a.id}')">✎</button><button title="Delete" onclick="delAcc('${a.id}')">🗑</button></div>
    <div><div class="t">${TYPES[a.type].ic} ${TYPES[a.type].l}${a.bank&&a.type!=='bank'?' · '+esc(a.bank):''}${a.archived?' · archived':''}</div><div class="n">${esc(a.name)}</div></div>
    <div><div class="t">${isAsset(a)?'Balance':'Outstanding'}</div><div class="b">${fmt(b)}</div>${extra}</div>
@@ -837,7 +883,7 @@ function saveVal(){const a=acc($('vId').value);const want=num($('vAmt').value);c
 /* ================= TRANSACTIONS ================= */
 let tType='expense';
 function accOptions(filter){return S.accounts.filter(a=>!a.archived&&(!filter||filter(a))).map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)} (${fmt(balance(a))})</option>`).join('')}
-function openTxn(type,id){
+function openTxn(type,id,pre){
   if(!S.accounts.length){toast('Add an account first');go('accounts');openAcc();return}
   const t=id?S.txns.find(x=>x.id===id):null;
   $('tId').value=id||'';$('txnTitle').textContent=t?'Edit Transaction':'Add Transaction';
@@ -845,12 +891,15 @@ function openTxn(type,id){
   setTType(t?t.type:type);
   $('tAmt').value=t?t.amount:'';$('tDate').value=t?t.date:today();$('tNote').value=t?t.note||'':'';$('tMode').value=t?t.mode||'UPI':'UPI';
   if(t){if(t.type==='transfer'){$('tFrom').value=t.from;$('tTo').value=t.to;$('tPurpose').value=t.purpose||'Self transfer'}else{$('tAcc').value=t.account;$('tCat').value=t.category}}
-  else if($('tTo').options.length>1)$('tTo').selectedIndex=1;
+  else{if($('tTo').options.length>1)$('tTo').selectedIndex=1;
+    if(pre){if(pre.acc)$('tAcc').value=pre.acc;if(pre.from){$('tFrom').value=pre.from;if($('tTo').value===pre.from)$('tTo').selectedIndex=$('tFrom').selectedIndex?0:1}if(pre.to){$('tTo').value=pre.to;if($('tFrom').value===pre.to)$('tFrom').selectedIndex=$('tTo').selectedIndex?0:1}}}
   $('mTxn').classList.add('show');setTimeout(()=>$('tAmt').focus(),50);
 }
 function setTType(t){tType=t;document.querySelectorAll('#tTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   document.querySelectorAll('.tx-single').forEach(e=>e.style.display=t==='transfer'?'none':'');document.querySelectorAll('.tx-transfer').forEach(e=>e.style.display=t==='transfer'?'':'none');
-  $('tCat').innerHTML=(t==='income'?S.cats.income:S.cats.expense).map(c=>`<option>${esc(c)}</option>`).join('');
+  $('tCat').innerHTML=(t==='income'?S.cats.income:S.cats.expense).map(c=>`<option>${esc(c)}</option>`).join('')+'<option value="__new">➕ New category…</option>';
+  $('tCat').onchange=function(){if(this.value!=='__new')return;const n=(prompt('New '+(tType==='income'?'income':'expense')+' category name')||'').trim();const L=tType==='income'?S.cats.income:S.cats.expense;
+    if(n&&!L.some(x=>x.toLowerCase()===n.toLowerCase())){L.push(n);save()}setTType(tType);if(n)this.value=L.find(x=>x.toLowerCase()===n.toLowerCase())||L[0];else this.selectedIndex=0};
   $('tAccLbl').textContent=t==='income'?'Received in account *':'Paid from account *';}
 function saveTxn(){
   const amt=num($('tAmt').value);if(amt<=0)return toast('Enter a valid amount');
@@ -898,7 +947,7 @@ function renderDues(){
 }
 
 /* ================= REPORTS ================= */
-function renderReports(){
+function renderReports(){stmtInit();
   if(!$('rMonth').value)$('rMonth').value=today().slice(0,7);
   const ym=$('rMonth').value;const[y,m]=ym.split('-').map(Number);
   const labels=[],inc=[],exp=[];for(let i=5;i>=0;i--){const d=new Date(y,m-1-i,1);const k=iso(d).slice(0,7);const s=monthStats(k);labels.push(d.toLocaleDateString('en-IN',{month:'short',year:'2-digit'}));inc.push(s.inc);exp.push(s.exp)}
@@ -1054,9 +1103,8 @@ function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileRe
 function exportCSV(){const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const rows=[['Date','Type','Account','From','To','Category/Purpose','Mode','Note','Amount']];sortedTxns().forEach(t=>rows.push([t.date,t.type,t.account?accName(t.account):'',t.from?accName(t.from):'',t.to?accName(t.to):'',t.category||t.purpose||'',t.mode||'',t.note||'',t.amount]));dl('cashflow-transactions-'+today()+'.csv','\ufeff'+rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');toast('CSV downloaded')}
 
 /* ================= SETTINGS ================= */
-function renderSettings(){renderSub();$('setLock').value=S.settings.lockMin||'10';$('setName').value=S.settings.name;$('setTheme').value=S.settings.theme;$('setCur').value=S.settings.cur;$('setExpCat').value=S.cats.expense.join(', ');$('setIncCat').value=S.cats.income.join(', ')}
+function renderSettings(){renderSub();$('setLock').value=S.settings.lockMin||'0';$('setName').value=S.settings.name;$('setTheme').value=S.settings.theme;$('setCur').value=S.settings.cur;renderCats();const g=ME&&ME.google;$('cpOldBox').style.display=g?'none':'';$('cpNew').placeholder=g?'Set a password for email login':''}
 function saveSettings(){S.settings.name=$('setName').value.trim()||S.settings.name;S.settings.theme=$('setTheme').value;S.settings.cur=$('setCur').value||'₹';applyTheme();save();render();toast('Settings saved')}
-function saveCats(){const sp=v=>v.split(',').map(x=>x.trim()).filter(Boolean);S.cats.expense=sp($('setExpCat').value);S.cats.income=sp($('setIncCat').value);save();toast('Categories saved')}
 function applyTheme(){const t=S?S.settings.theme:(localStorage.getItem('wr_theme')||'dark');localStorage.setItem('wr_theme',t);document.body.classList.toggle('light',t==='light')}
 function toggleTheme(){if(S){S.settings.theme=S.settings.theme==='light'?'dark':'light';save(true)}else localStorage.setItem('wr_theme',localStorage.getItem('wr_theme')==='light'?'dark':'light');applyTheme();if(S)render()}
 $('lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});$('actKey').addEventListener('keydown',e=>{if(e.key==='Enter')activateKey()});$('sPass2').addEventListener('keydown',e=>{if(e.key==='Enter')doSignup()});
@@ -1104,22 +1152,90 @@ function loadDemo(){
   save();go('dashboard');toast('Demo data loaded');
 }
 
+/* ================= CATEGORIES ================= */
+function renderCats(){const ch=(t)=>(S.cats[t]||[]).map((c,i)=>`<span class="chip">${esc(c)}<button title="Rename" onclick="renCat('${t}',${i})">✎</button><button title="Delete" onclick="delCat('${t}',${i})">✕</button></span>`).join('')||'<span style="color:var(--muted)">None yet</span>';
+  $('catExp').innerHTML=ch('expense');$('catInc').innerHTML=ch('income')}
+function addCat(t){const el=$(t==='income'?'newInc':'newExp');const n=el.value.trim();if(!n)return;const L=S.cats[t];if(L.some(x=>x.toLowerCase()===n.toLowerCase()))return toast('Already exists');L.push(n);el.value='';save();renderCats();toast('Category added')}
+function renCat(t,i){const old=S.cats[t][i];const n=(prompt('Rename category',old)||'').trim();if(!n||n===old)return;if(S.cats[t].some((x,j)=>j!==i&&x.toLowerCase()===n.toLowerCase()))return toast('Already exists');
+  S.cats[t][i]=n;S.txns.forEach(x=>{if(x.type===t&&x.category===old)x.category=n});save();renderCats();toast('Renamed')}
+function delCat(t,i){const c=S.cats[t][i];const used=S.txns.filter(x=>x.type===t&&x.category===c).length;
+  if(!confirm(used?`"${c}" is used in ${used} transaction(s). They keep this name. Delete from the list?`:`Delete "${c}"?`))return;S.cats[t].splice(i,1);save();renderCats();toast('Deleted')}
+function saveCats(){}
+
+/* ================= ACCOUNT ACTION SHEET ================= */
+function accSheet(id){const a=acc(id);if(!a)return;$('asName').textContent=TYPES[a.type].ic+' '+a.name;$('asBal').textContent=(isAsset(a)?'Balance ':'Outstanding ')+fmt(balance(a));
+  const B=(ic,l,f)=>`<button onclick="$('accSheet').classList.remove('show');${f}"><span>${ic}</span>${l}</button>`;
+  const L=!isAsset(a);
+  $('asBtns').innerHTML=B('➖',L?'Spend / Charge':'Expense',`openTxn('expense',null,{acc:'${id}'})`)+B('➕',L?'Refund / Credit':'Income',`openTxn('income',null,{acc:'${id}'})`)+
+   B('↗',L?'Pay from here':'Transfer out',`openTxn('transfer',null,{from:'${id}'})`)+B('↙',L?'Pay this bill / EMI':'Transfer in',`openTxn('transfer',null,{to:'${id}'})`)+
+   B('🧾','Transactions',`showAccTx('${id}')`)+B('📄','Statement',`openStmt('${id}')`)+B('✎','Edit',`openAcc('${id}')`)+
+   (['invest','locker','cash','other','wallet','bank'].includes(a.type)?B('↻','Update value',`openVal('${id}')`):'');
+  $('accSheet').classList.add('show')}
+
+/* ================= STATEMENTS (PDF / EXCEL) ================= */
+function stmtInit(){const s=$('stAcc');const cur=s.value;s.innerHTML='<option value="__all">All accounts (combined)</option><option value="__each">All accounts (separate)</option>'+S.accounts.map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)}${a.archived?' (archived)':''}</option>`).join('');if(cur)s.value=cur;if(!s.value)s.value='__all';if(!$('stFrom').value)stRange('month')}
+function stRange(k){const n=new Date();let f,t=new Date(n);if(k==='month')f=new Date(n.getFullYear(),n.getMonth(),1);else if(k==='last'){f=new Date(n.getFullYear(),n.getMonth()-1,1);t=new Date(n.getFullYear(),n.getMonth(),0)}
+  else if(k==='fy'){const y=n.getMonth()>=3?n.getFullYear():n.getFullYear()-1;f=new Date(y,3,1)}else{const ds=S.txns.map(x=>x.date).sort();f=ds.length?pd(ds[0]):new Date(n.getFullYear(),0,1)}
+  $('stFrom').value=iso(f);$('stTo').value=iso(t)}
+function openStmt(id){go('reports');stmtInit();$('stAcc').value=id;setTimeout(()=>$('stmtCard').scrollIntoView({behavior:'smooth'}),80)}
+function dayBefore(s){const x=pd(s);x.setDate(x.getDate()-1);return iso(x)}
+function txFlow(t,id){const v=num(t.amount);if(t.type==='expense'&&t.account===id)return{out:v};if(t.type==='income'&&t.account===id)return{in:v};if(t.type==='transfer'){if(t.from===id)return{out:v,other:t.to};if(t.to===id)return{in:v,other:t.from}}return null}
+function partic(t,other){if(t.type==='transfer')return(t.purpose||'Transfer')+(other?(t.from===other?' from ':' to ')+accName(other):'');return t.category||''}
+function accStatement(a,from,to){const L=!isAsset(a);const open=balance(a,dayBefore(from));let bal=open,tin=0,tout=0;
+  const rows=S.txns.filter(t=>t.date>=from&&t.date<=to).sort((x,y)=>x.date.localeCompare(y.date)||(x.id>y.id?1:-1)).map(t=>{const f=txFlow(t,a.id);if(!f)return null;const i=f.in||0,o=f.out||0;tin+=i;tout+=o;bal+=L?(o-i):(i-o);
+    return{date:t.date,type:t.type,part:partic(t,f.other),mode:t.mode||'',note:t.note||'',in:i,out:o,bal}}).filter(Boolean);
+  return{a,open,close:bal,tin,tout,rows,L}}
+function combined(from,to){return S.txns.filter(t=>t.date>=from&&t.date<=to).sort((x,y)=>x.date.localeCompare(y.date)||(x.id>y.id?1:-1)).map(t=>({date:t.date,type:t.type,account:t.type==='transfer'?accName(t.from)+' → '+accName(t.to):accName(t.account),part:t.type==='transfer'?(t.purpose||'Transfer'):(t.category||''),mode:t.mode||'',note:t.note||'',in:t.type==='income'?num(t.amount):0,out:t.type==='expense'?num(t.amount):0,tr:t.type==='transfer'?num(t.amount):0}))}
+function stmtArgs(){const v=$('stAcc').value,from=$('stFrom').value,to=$('stTo').value;if(!from||!to||from>to){toast('Choose a valid date range');return null}return{v,from,to}}
+const loadJS=(u)=>new Promise((res,rej)=>{if(document.querySelector('script[src="'+u+'"]'))return res();const s=document.createElement('script');s.src=u;s.onload=res;s.onerror=()=>rej(new Error('Download failed, check internet'));document.head.appendChild(s)});
+const n2=v=>Math.round((+v||0)*100)/100;const rs=v=>'Rs. '+(+v||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+async function stmtPDF(){const A=stmtArgs();if(!A)return;toast('Preparing PDF…');
+  try{await loadJS('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');await loadJS('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js');
+  const doc=new jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4'});const W=doc.internal.pageSize.getWidth();const who=(S.settings.name||ME&&ME.name||'')+' · '+(SES?SES.user:'');
+  const head=(title,sub)=>{doc.setFontSize(16);doc.setTextColor(40);doc.text((CFG.appName||'CASHFLOW')+' · '+title,40,40);doc.setFontSize(10);doc.setTextColor(110);doc.text(sub,40,58);doc.text(who,W-40,40,{align:'right'});doc.text('Generated '+dfmt(today()),W-40,58,{align:'right'})};
+  const period=dfmt(A.from)+' to '+dfmt(A.to);let first=true;
+  const one=(a)=>{const s=accStatement(a,A.from,A.to);if(!first)doc.addPage();first=false;head(a.name+' statement',TYPES[a.type].l+(a.bank?' · '+a.bank:'')+' · '+period);
+    doc.autoTable({startY:72,head:[['Date','Particulars','Mode','Note','In (Credit)','Out (Debit)',s.L?'Outstanding':'Balance']],
+      body:[['',{content:'Opening balance',styles:{fontStyle:'bold'}},'','','','',rs(s.open)]].concat(s.rows.map(r=>[dfmt(r.date),r.part,r.mode,r.note,r.in?rs(r.in):'',r.out?rs(r.out):'',rs(r.bal)])).concat([['',{content:'Closing balance',styles:{fontStyle:'bold'}},'','',rs(s.tin),rs(s.tout),rs(s.close)]]),
+      styles:{fontSize:8.5,cellPadding:4},headStyles:{fillColor:[108,124,255]},columnStyles:{4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}},margin:{left:40,right:40}})};
+  if(A.v==='__all'){const R=combined(A.from,A.to);head('All accounts',period);let i=0,o=0,t=0;R.forEach(r=>{i+=r.in;o+=r.out;t+=r.tr});
+    doc.autoTable({startY:72,head:[['Date','Type','Account','Category / Purpose','Mode','Note','Income','Expense','Transfer']],body:R.map(r=>[dfmt(r.date),r.type,r.account,r.part,r.mode,r.note,r.in?rs(r.in):'',r.out?rs(r.out):'',r.tr?rs(r.tr):'']).concat([[{content:'Total',styles:{fontStyle:'bold'}},'','','','','',rs(i),rs(o),rs(t)]]),
+      styles:{fontSize:8.5,cellPadding:4},headStyles:{fillColor:[108,124,255]},columnStyles:{6:{halign:'right'},7:{halign:'right'},8:{halign:'right'}},margin:{left:40,right:40}})}
+  else if(A.v==='__each')S.accounts.filter(a=>!a.archived).forEach(one);else one(acc(A.v));
+  const pages=doc.internal.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(150);doc.text('Page '+p+' of '+pages,W/2,doc.internal.pageSize.getHeight()-18,{align:'center'})}
+  doc.save(stmtName(A)+'.pdf');toast('PDF downloaded')}catch(e){toast(e.message||'PDF failed')}}
+function stmtName(A){const nm=A.v==='__all'?'all-accounts':A.v==='__each'?'all-statements':(acc(A.v).name||'account');return 'CASHFLOW-'+nm.replace(/[^a-z0-9]+/gi,'-')+'-'+A.from+'-to-'+A.to}
+async function stmtXLS(){const A=stmtArgs();if(!A)return;toast('Preparing Excel…');
+  try{await loadJS('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');const wb=XLSX.utils.book_new();const used=new Set();
+  const sheetName=n=>{let b=String(n).replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,28)||'Sheet';let x=b,i=2;while(used.has(x.toLowerCase()))x=b.slice(0,25)+' '+(i++);used.add(x.toLowerCase());return x};
+  const one=a=>{const s=accStatement(a,A.from,A.to);const rows=[[a.name+' statement'],[TYPES[a.type].l+(a.bank?' · '+a.bank:''),dfmt(A.from)+' to '+dfmt(A.to)],[],['Date','Particulars','Mode','Note','In (Credit)','Out (Debit)',s.L?'Outstanding':'Balance'],['','Opening balance','','','','',n2(s.open)]]
+      .concat(s.rows.map(r=>[r.date,r.part,r.mode,r.note,r.in?n2(r.in):'',r.out?n2(r.out):'',n2(r.bal)])).concat([['','Closing balance','','',n2(s.tin),n2(s.tout),n2(s.close)]]);
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:30},{wch:10},{wch:30},{wch:14},{wch:14},{wch:15}];XLSX.utils.book_append_sheet(wb,ws,sheetName(a.name))};
+  if(A.v==='__all'){const R=combined(A.from,A.to);const rows=[['All accounts',dfmt(A.from)+' to '+dfmt(A.to)],[],['Date','Type','Account','Category / Purpose','Mode','Note','Income','Expense','Transfer']].concat(R.map(r=>[r.date,r.type,r.account,r.part,r.mode,r.note,r.in||'',r.out||'',r.tr||'']));
+    rows.push(['Total','','','','','',n2(R.reduce((s,r)=>s+r.in,0)),n2(R.reduce((s,r)=>s+r.out,0)),n2(R.reduce((s,r)=>s+r.tr,0))]);
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:12},{wch:10},{wch:28},{wch:24},{wch:10},{wch:30},{wch:13},{wch:13},{wch:13}];XLSX.utils.book_append_sheet(wb,ws,'All transactions');
+    const sum=[['Account','Type','Opening','In','Out','Closing']].concat(S.accounts.filter(a=>!a.archived).map(a=>{const s=accStatement(a,A.from,A.to);return[a.name,TYPES[a.type].l,n2(s.open),n2(s.tin),n2(s.tout),n2(s.close)]}));
+    const w2=XLSX.utils.aoa_to_sheet(sum);w2['!cols']=[{wch:28},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];XLSX.utils.book_append_sheet(wb,w2,'Account summary')}
+  else if(A.v==='__each')S.accounts.filter(a=>!a.archived).forEach(one);else one(acc(A.v));
+  XLSX.writeFile(wb,stmtName(A)+'.xlsx');toast('Excel downloaded')}catch(e){toast(e.message||'Excel failed')}}
+
+/* ================= INSTALL (PWA) ================= */
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const b=$('installBtn');if(b)b.style.display=''});
+window.addEventListener('appinstalled',()=>{deferredPrompt=null;const b=$('installBtn');if(b)b.style.display='none';toast('CASHFLOW installed ✓')});
+function installApp(){if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.finally(()=>{deferredPrompt=null});return}
+  alert(/iphone|ipad/i.test(navigator.userAgent)?'iPhone: tap the Share button in Safari, then "Add to Home Screen".':'Open the browser menu (⋮) and tap "Install app" or "Add to Home screen".')}
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+
 /* ================= INIT ================= */
 applyTheme();
 if(!window.crypto||!crypto.subtle){document.querySelector('#auth .sec').innerHTML='<b style="color:var(--red)">Open CASHFLOW over https (or from your computer) — secure encryption is not available on this connection.</b>'}
 if(!Object.keys(getUsers()).length)authTab('signup');
+restoreSes();
 initGoogleLogin();
 if(!API_URL){$('lErr').textContent=$('sErr').textContent='Setup pending: server link (API_URL) is not added yet.'}
 else api('config').then(applyCfg).catch(()=>{});
 if(new URLSearchParams(location.search).get('razorpay_payment_link_id')){const o=JSON.parse(sessionStorage.getItem('wr_order')||'{}');if(o.email)$('lUser').value=o.email;$('lErr').style.color='var(--green)';$('lErr').textContent='Payment received. Login to confirm it.'}
-</script>
-<div id="gResume" style="display:none;position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;background:#1a73e8;color:#fff;padding:10px 16px;border-radius:24px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:14px;cursor:pointer" onclick="gResume()">🔄 Google auto-save paused · Tap to resume</div>
-<script>
-function gNeedResume(){try{return !!(GOOGLE_CLIENT_ID&&typeof S!=='undefined'&&S&&S.settings&&S.settings.sheetId&&(!gTok||Date.now()>gExp))}catch(e){return false}}
-function updateGBanner(){const b=document.getElementById('gResume');if(b)b.style.display=gNeedResume()?'':'none';
-  try{const a=document.getElementById('advCard');if(a&&GOOGLE_CLIENT_ID)a.style.display='none'}catch(e){}}
-async function gResume(){try{await gAuth('');await gPush(true)}catch(e){toast('Google: '+e.message)}updateGBanner()}
-setInterval(updateGBanner,3000);
 </script>
 </body>
 </html>
