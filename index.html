@@ -245,7 +245,7 @@ th,td{padding:9px 5px;font-size:12px}
 
   <main>
     <div class="top">
-      <div><h1 id="vTitle">Dashboard</h1><div class="sub" id="vSub"></div></div>
+      <div><h1 id="vTitle">Dashboard</h1><div class="sub"><span id="vSub"></span> <span id="cloudSt" class="pill" style="font-size:11px;display:none;margin-left:6px"></span></div></div>
       <div class="row">
         <button class="btn red" onclick="openTxn('expense')">− Expense</button>
         <button class="btn green" onclick="openTxn('income')">+ Income</button>
@@ -520,7 +520,7 @@ th,td{padding:9px 5px;font-size:12px}
    API_URL          : your CASHFLOW server (Apps Script Web App URL)
    GOOGLE_CLIENT_ID : OAuth Web Client ID (one-click Google Sheet for every user)   */
 const API_URL = 'https://script.google.com/macros/s/AKfycbzuWDXN3G9RaT5DgtDm7tUxPXnVVaH7uYqEd5ltQgtfzxw3-p9nFnfgaaeuUpDOoyU7/exec';  // e.g. 'https://script.google.com/macros/s/XXXX/exec'
-const GOOGLE_CLIENT_ID = '';
+let GOOGLE_CLIENT_ID = '';
 const APP_VERSION = '3.0';
 /* ================= DATA ================= */
 const KEY='agac_money_v1';
@@ -556,7 +556,9 @@ const getUsers=()=>{try{return JSON.parse(localStorage.getItem(USERS))||{}}catch
 const setUsers=u=>localStorage.setItem(USERS,JSON.stringify(u));
 const dataKey=u=>'wr_data_'+u;
 let saveQ=Promise.resolve(),syncTimer=null;
-function save(skipSync){if(!S||!SES)return;S.updated=Date.now();const snap=JSON.parse(JSON.stringify(S));const ses=SES;
+function save(skipSync){if(!S||!SES)return;S.updated=Date.now();
+  if(CLOUD){cDirty=true;setCS('saving');clearTimeout(cTimer);cTimer=setTimeout(cloudPush,700);if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),2500)}return}
+  const snap=JSON.parse(JSON.stringify(S));const ses=SES;
   saveQ=saveQ.then(async()=>{const e=await encObj(ses.key,snap);localStorage.setItem(dataKey(ses.user),JSON.stringify(e))}).catch(()=>toast('Save failed'));
   if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),1500)}
   else if(!skipSync&&S.settings.syncUrl&&S.settings.syncAuto==='1'){clearTimeout(syncTimer);syncTimer=setTimeout(()=>pushCloud(false),1500)}}
@@ -568,7 +570,7 @@ async function api(action,data){
   const j=await r.json();if(j.relogin&&S){toast('Session expired, please login again');logout()}return j}
 async function sha256hex(t){return[...new Uint8Array(await crypto.subtle.digest('SHA-256',te.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('')}
 const pwHash=(email,pw)=>sha256hex('workrow|'+email+'|'+pw);
-function applyCfg(c){if(!c)return;['plans','appName','announcement','supportEmail','supportPhone','auto','upiId','upiName','qrUrl'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
+function applyCfg(c){if(!c)return;if(c.googleClientId&&c.googleClientId!==GOOGLE_CLIENT_ID){GOOGLE_CLIENT_ID=c.googleClientId;try{initGoogleLogin()}catch(e){}}['plans','appName','announcement','supportEmail','supportPhone','auto','upiId','upiName','qrUrl'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
 const subActive=sub=>!!(sub&&sub.endDate&&sub.endDate>=today()&&!sub.blocked);
 /* ---- auth ---- */
 function authTab(t){document.querySelectorAll('#authTabs button').forEach(b=>b.classList.toggle('on',b.dataset.a===t));$('authLogin').style.display=t==='login'?'':'none';$('authSignup').style.display=t==='signup'?'':'none';$('authForgot').style.display=t==='forgot'?'':'none';$('lErr').textContent=$('sErr').textContent=$('fErr').textContent=''}
@@ -582,17 +584,25 @@ async function openLocal(email,secrets,me,fresh){
   let data=null;
   if(raw){for(let i=0;i<secrets.length&&!data;i++){try{data=await decObj(i?await pbk(secrets[i],ub64(rec.ks),'key'):key,JSON.parse(raw))}catch(e){}}
     if(!data&&!fresh)toast('Old data on this device could not be opened. Load it from your Google Sheet in Backup.')}
-  SES={user:email,key,token:me.token,dk:!!me.dataKey};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;save(true);
+  let up=false;CLOUD=false;
+  if(me.dataKey&&me.token){try{cKey=await cloudKey(me.dataKey);const rd=await cloudLoad(me.token);
+    if(rd!=='nocloud'){CLOUD=true;if(data&&rd){data=mergeData(normalize(data),normalize(rd));up=true}else if(data)up=true;else data=rd}}
+    catch(e){if(!data)throw new Error('Could not load your data from the cloud. Check internet and try again.')}}
+  SES={user:email,key,token:me.token,dk:!!me.dataKey};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;
+  if(CLOUD){if(up||localStorage.getItem(dataKey(email))){cLocalDel=email;cDirty=true;cloudPush()}}else save(true);
   await rememberSes();
 }
-async function rememberSes(){try{const k=b64(await crypto.subtle.exportKey('raw',SES.key));localStorage.setItem('wr_ses',JSON.stringify({email:SES.user,token:SES.token,k,name:ME.name,sub:ME.sub,google:!!ME.google,dk:SES.dk}))}catch(e){}}
+async function rememberSes(){try{const k=b64(await crypto.subtle.exportKey('raw',CLOUD?cKey:SES.key));localStorage.setItem('wr_ses',JSON.stringify({email:SES.user,token:SES.token,k,cloud:!!CLOUD,cid:GOOGLE_CLIENT_ID,name:ME.name,sub:ME.sub,google:!!ME.google,dk:SES.dk}))}catch(e){}}
 async function restoreSes(){
   let r;try{r=JSON.parse(localStorage.getItem('wr_ses')||'null')}catch(e){}if(!r||!r.k||!r.email)return false;
   try{const key=await crypto.subtle.importKey('raw',ub64(r.k),{name:'AES-GCM'},true,['encrypt','decrypt']);
-    const raw=localStorage.getItem(dataKey(r.email));const data=raw?await decObj(key,JSON.parse(raw)):null;
-    SES={user:r.email,key,token:r.token,dk:r.dk};ME={ok:true,token:r.token,email:r.email,name:r.name,sub:r.sub,google:r.google};S=normalize(data);
+    if(r.cid&&!GOOGLE_CLIENT_ID)GOOGLE_CLIENT_ID=r.cid;let data=null;
+    if(r.cloud){CLOUD=true;cKey=key;$('lErr').textContent='Loading your data…';try{data=await cloudLoad(r.token)}catch(e){$('lErr').textContent=String(e.message).includes('expired')?'':'No internet. Connect and reopen the app.';CLOUD=null;cKey=null;return false}
+      if(data==='nocloud'){CLOUD=null;cKey=null;localStorage.removeItem('wr_ses');$('lErr').textContent='';return false}$('lErr').textContent=''}
+    else{const raw=localStorage.getItem(dataKey(r.email));data=raw?await decObj(key,JSON.parse(raw)):null}
+    SES={user:r.email,key:r.cloud?null:key,token:r.token,dk:r.dk};ME={ok:true,token:r.token,email:r.email,name:r.name,sub:r.sub,google:r.google};S=normalize(data);
     startApp();
-    api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
+    api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);if(!CLOUD&&me.dataKey)migrateToCloud(me.dataKey,r.token);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
     return true}catch(e){localStorage.removeItem('wr_ses');return false}
 }
 
@@ -694,7 +704,7 @@ function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)retur
   if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
   if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
 function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
-function logout(){localStorage.removeItem('wr_ses');otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+function logout(){localStorage.removeItem('wr_ses');if(CLOUD&&(cDirty||cBusy))cloudPush(true);otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;CLOUD=null;cKey=null;cRev=0;cDirty=false;setCS('');$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
 let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
 async function changePass(){
@@ -882,7 +892,7 @@ async function delAcc(id){
   const used=S.txns.filter(t=>t.account===id||t.from===id||t.to===id).length;
   const a=acc(id);
   if(used){if(a.archived){a.archived=false;save();render();return toast('Restored')}if(confirm(`"${a.name}" has ${used} transactions.\n\nOK = Archive (hide, keep history)\nCancel = keep`)){a.archived=true;save();render();toast('Archived')}return}
-  if(confirm('Delete "'+a.name+'"?')&&await guard('delete an account')){S.accounts=S.accounts.filter(x=>x.id!==id);save();render();toast('Deleted')}
+  if(confirm('Delete "'+a.name+'"?')&&await guard('delete an account')){S.accounts=S.accounts.filter(x=>x.id!==id);markDel(id);save();render();toast('Deleted')}
 }
 function openVal(id){const a=acc(id);$('vId').value=id;$('vInfo').textContent=`${a.name}: app balance is ${fmt(balance(a))}. Enter the actual amount (e.g. today's fund value, cash counted in locker, bank passbook balance). The difference is saved as a value adjustment.`;$('vAmt').value=balance(a).toFixed(2);$('mVal').classList.add('show')}
 function saveVal(){const a=acc($('vId').value);const want=num($('vAmt').value);const cur=balance(a);a.adj=num(a.adj)+(want-cur);a.valUpdated=today();save();closeM('mVal');render();toast('Value updated')}
@@ -923,7 +933,7 @@ async function saveTxn(){
   else S.txns.push(Object.assign({id:uid(),created:Date.now()},n));
   save();closeM('mTxn');render();toast('Saved');
 }
-async function delTxn(id){if(!confirm('Delete this transaction?'))return;if(!await guard('delete a transaction'))return;S.txns=S.txns.filter(t=>t.id!==id);save();render();toast('Deleted')}
+async function delTxn(id){if(!confirm('Delete this transaction?'))return;if(!await guard('delete a transaction'))return;S.txns=S.txns.filter(t=>t.id!==id);markDel(id);save();render();toast('Deleted')}
 function sortedTxns(){return S.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id>a.id?1:-1))}
 function txnTable(list,compact){
   if(!list.length)return'<div class="empty">No transactions yet. Use − Expense, + Income or ⇄ Transfer at the top.</div>';
@@ -1121,7 +1131,7 @@ function saveSettings(){S.settings.name=$('setName').value.trim()||S.settings.na
 function applyTheme(){const t=S?S.settings.theme:(localStorage.getItem('wr_theme')||'dark');localStorage.setItem('wr_theme',t);document.body.classList.toggle('light',t==='light')}
 function toggleTheme(){if(S){S.settings.theme=S.settings.theme==='light'?'dark':'light';save(true)}else localStorage.setItem('wr_theme',localStorage.getItem('wr_theme')==='light'?'dark':'light');applyTheme();if(S)render()}
 $('lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});$('actKey').addEventListener('keydown',e=>{if(e.key==='Enter')activateKey()});$('sPass2').addEventListener('keydown',e=>{if(e.key==='Enter')doSignup()});
-async function wipeAll(){if(confirm('Delete ALL your accounts and transactions?')&&confirm('Are you sure? This cannot be undone.')&&await guard('delete ALL data')){const keep=S.settings;S=blank();S.settings=keep;save(true);render();toast('All data deleted')}}
+async function wipeAll(){if(confirm('Delete ALL your accounts and transactions?')&&confirm('Are you sure? This cannot be undone.')&&await guard('delete ALL data')){const keep=S.settings;const ids=S.txns.map(t=>t.id).concat(S.accounts.map(a=>a.id));S=blank();S.settings=keep;S.wiped=Date.now();S.deleted=ids.slice(-3000).map(id=>({id,t:Date.now()}));save();render();toast('All data deleted')}}
 function closeM(id){$(id).classList.remove('show')}
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){if(m.id==='mOtp')otpDone(false);else m.classList.remove('show')}}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('mOtp').classList.contains('show')){otpDone(false);return}if(e.key==='Escape')document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'))});
@@ -1165,6 +1175,33 @@ async function loadDemo(){
   T({type:'transfer',amount:28500,date:iso(new Date(new Date().getFullYear(),new Date().getMonth(),Math.min(5,new Date().getDate()))),from:sbi,to:hl,purpose:'Loan EMI',note:'Home loan EMI',mode:'Auto-debit'});
   save();go('dashboard');toast('Demo data loaded');
 }
+
+/* ================= CLOUD COPY (server, locked) ================= */
+let cLocalDel=null,CLOUD=null,cKey=null,cRev=0,cDirty=false,cBusy=false,cTimer=null,cFail=0;
+const cloudKey=dk=>pbk(dk,te.encode('cashflow-cloud-v1'),'key');
+async function cloudLoad(token){const r=await api('cloudGet',{token});if(!r.ok){if(r.error==='Unknown action')return'nocloud';throw new Error(r.error||'Cloud error')}
+  cRev=r.rev||0;return r.data?await decObj(cKey,JSON.parse(r.data)):null}
+async function migrateToCloud(dk,token){try{const k=await cloudKey(dk);const prev=cKey;cKey=k;const rd=await cloudLoad(token);if(rd==='nocloud'){cKey=prev;return}
+  CLOUD=true;S=normalize(mergeData(S,rd&&normalize(rd)));SES.dk=true;cLocalDel=SES.user;cDirty=true;cloudPush();await rememberSes();render()}catch(e){}}
+function markDel(id){S.deleted=(S.deleted||[]).concat([{id,t:Date.now()}]).slice(-3000)}
+function mergeData(L,Rm){if(!Rm)return L;if(!L)return Rm;const del=new Set([].concat(L.deleted||[],Rm.deleted||[]).map(x=>x.id||x));
+  const mg=(a,b)=>{const m=new Map();(b||[]).forEach(x=>m.set(x.id,x));(a||[]).forEach(x=>{const o=m.get(x.id);if(!o||(x.edited||x.created||0)>=(o.edited||o.created||0))m.set(x.id,x)});return[...m.values()].filter(x=>!del.has(x.id))};
+  const o=Object.assign({},L);o.accounts=mg(L.accounts,Rm.accounts);o.txns=mg(L.txns,Rm.txns);
+  o.cats={expense:[...new Set([].concat(L.cats&&L.cats.expense||[],Rm.cats&&Rm.cats.expense||[]))],income:[...new Set([].concat(L.cats&&L.cats.income||[],Rm.cats&&Rm.cats.income||[]))]};
+  o.deleted=[].concat(L.deleted||[],Rm.deleted||[]).slice(-3000);return o}
+function setCS(st){const e=$('cloudSt');if(!e)return;if(!st||!CLOUD){e.style.display='none';return}e.style.display='';
+  e.className='pill '+(st==='saved'?'ok':st==='saving'?'soon':'over');e.textContent=st==='saved'?'☁ Saved':st==='saving'?'☁ Saving…':'⚠ Not saved · no internet'}
+async function cloudPush(force){
+  if(!CLOUD||!S||!SES||(!cDirty&&!force))return;if(cBusy){cDirty=true;return}
+  cBusy=true;cDirty=false;const snap=JSON.parse(JSON.stringify(S)),key=cKey,token=SES.token,base=cRev,snapUser=SES.user;setCS('saving');
+  try{const enc=await encObj(key,snap);const r=await api('cloudPut',{token,data:JSON.stringify(enc),baseRev:base});
+    if(r.conflict){const rm=r.data?await decObj(key,JSON.parse(r.data)):null;cRev=r.rev;if(S){S=normalize(mergeData(S,rm));cDirty=true;render()}}
+    else if(!r.ok)throw new Error(r.error);else{cRev=r.rev;cFail=0;if(cLocalDel&&cLocalDel===snapUser){localStorage.removeItem(dataKey(cLocalDel));cLocalDel=null}}
+    setCS(cDirty?'saving':'saved')}
+  catch(e){if(S){cDirty=true;setCS('offline');cFail++;clearTimeout(cTimer);cTimer=setTimeout(cloudPush,Math.min(60000,4000*cFail))}}
+  finally{cBusy=false;if(cDirty&&S&&!cFail){clearTimeout(cTimer);cTimer=setTimeout(cloudPush,300)}}}
+window.addEventListener('beforeunload',e=>{if(CLOUD&&(cDirty||cBusy)){e.preventDefault();e.returnValue=''}});
+window.addEventListener('online',()=>{if(CLOUD&&cDirty){cFail=0;cloudPush()}});
 
 /* ================= EMAIL OTP GUARD ================= */
 let otpUntil=0,otpRes=null,otpWhat='';
