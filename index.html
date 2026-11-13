@@ -498,6 +498,13 @@ th,td{padding:9px 5px;font-size:12px}
 </div></div>
 
 <!-- VALUE MODAL -->
+<div class="modal-bg" id="mOtp" style="z-index:300"><div class="modal" style="max-width:380px">
+  <h2>🔐 Confirm with email code<button class="icon-btn" onclick="otpDone(false)">✕</button></h2>
+  <p style="color:var(--muted);margin-bottom:10px" id="otpInfo"></p>
+  <input id="otpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="font-size:22px;letter-spacing:6px;text-align:center" onkeydown="if(event.key==='Enter')otpVerify()">
+  <div id="otpErr" style="color:var(--red);font-size:13px;min-height:18px;margin-top:6px"></div>
+  <div class="row" style="margin-top:10px;justify-content:space-between"><button class="btn ghost sm" id="otpResend" onclick="otpSend(true)">Resend code</button><button class="btn" onclick="otpVerify()">Confirm</button></div>
+</div></div>
 <div class="modal-bg" id="mVal"><div class="modal" style="max-width:400px">
   <h2>Update balance / value<button class="icon-btn" onclick="closeM('mVal')">✕</button></h2>
   <input type="hidden" id="vId">
@@ -687,7 +694,7 @@ function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)retur
   if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
   if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
 function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
-function logout(){localStorage.removeItem('wr_ses');clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+function logout(){localStorage.removeItem('wr_ses');otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
 let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
 async function changePass(){
@@ -871,26 +878,26 @@ function saveAcc(){
   if(o.type==='loan'&&o.principal===''&&!id)o.principal=num(o.opening);
   if(!id)S.accounts.push(o);save();closeM('mAcc');render();toast('Account saved');
 }
-function delAcc(id){
+async function delAcc(id){
   const used=S.txns.filter(t=>t.account===id||t.from===id||t.to===id).length;
   const a=acc(id);
-  if(used){if(confirm(`"${a.name}" has ${used} transactions.\n\nOK = Archive (hide, keep history)\nCancel = keep`)){a.archived=!a.archived;save();render()}return}
-  if(confirm('Delete "'+a.name+'"?')){S.accounts=S.accounts.filter(x=>x.id!==id);save();render();toast('Deleted')}
+  if(used){if(a.archived){a.archived=false;save();render();return toast('Restored')}if(confirm(`"${a.name}" has ${used} transactions.\n\nOK = Archive (hide, keep history)\nCancel = keep`)){a.archived=true;save();render();toast('Archived')}return}
+  if(confirm('Delete "'+a.name+'"?')&&await guard('delete an account')){S.accounts=S.accounts.filter(x=>x.id!==id);save();render();toast('Deleted')}
 }
 function openVal(id){const a=acc(id);$('vId').value=id;$('vInfo').textContent=`${a.name}: app balance is ${fmt(balance(a))}. Enter the actual amount (e.g. today's fund value, cash counted in locker, bank passbook balance). The difference is saved as a value adjustment.`;$('vAmt').value=balance(a).toFixed(2);$('mVal').classList.add('show')}
 function saveVal(){const a=acc($('vId').value);const want=num($('vAmt').value);const cur=balance(a);a.adj=num(a.adj)+(want-cur);a.valUpdated=today();save();closeM('mVal');render();toast('Value updated')}
 
 /* ================= TRANSACTIONS ================= */
 let tType='expense';
-function accOptions(filter){return S.accounts.filter(a=>!a.archived&&(!filter||filter(a))).map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)} (${fmt(balance(a))})</option>`).join('')}
+function accOptions(filter,keep){return S.accounts.filter(a=>(!a.archived||(keep||[]).includes(a.id))&&(!filter||filter(a))).map(a=>`<option value="${a.id}">${TYPES[a.type].ic} ${esc(a.name)} (${fmt(balance(a))})</option>`).join('')}
 function openTxn(type,id,pre){
   if(!S.accounts.length){toast('Add an account first');go('accounts');openAcc();return}
   const t=id?S.txns.find(x=>x.id===id):null;
   $('tId').value=id||'';$('txnTitle').textContent=t?'Edit Transaction':'Add Transaction';
-  $('tAcc').innerHTML=accOptions();$('tFrom').innerHTML=accOptions();$('tTo').innerHTML=accOptions();
+  const keep=t?[t.account,t.from,t.to]:[];const ao=accOptions(null,keep);$('tAcc').innerHTML=ao;$('tFrom').innerHTML=ao;$('tTo').innerHTML=ao;
   setTType(t?t.type:type);
   $('tAmt').value=t?t.amount:'';$('tDate').value=t?t.date:today();$('tNote').value=t?t.note||'':'';$('tMode').value=t?t.mode||'UPI':'UPI';
-  if(t){if(t.type==='transfer'){$('tFrom').value=t.from;$('tTo').value=t.to;$('tPurpose').value=t.purpose||'Self transfer'}else{$('tAcc').value=t.account;$('tCat').value=t.category}}
+  if(t){if(t.type==='transfer'){$('tFrom').value=t.from;$('tTo').value=t.to;$('tPurpose').value=t.purpose||'Self transfer'}else{$('tAcc').value=t.account;if(t.category&&![...$('tCat').options].some(o=>o.value===t.category))$('tCat').insertAdjacentHTML('afterbegin',`<option>${esc(t.category)}</option>`);$('tCat').value=t.category}}
   else{if($('tTo').options.length>1)$('tTo').selectedIndex=1;
     if(pre){if(pre.acc)$('tAcc').value=pre.acc;if(pre.from){$('tFrom').value=pre.from;if($('tTo').value===pre.from)$('tTo').selectedIndex=$('tFrom').selectedIndex?0:1}if(pre.to){$('tTo').value=pre.to;if($('tFrom').value===pre.to)$('tFrom').selectedIndex=$('tTo').selectedIndex?0:1}}}
   $('mTxn').classList.add('show');setTimeout(()=>$('tAmt').focus(),50);
@@ -901,16 +908,22 @@ function setTType(t){tType=t;document.querySelectorAll('#tTabs button').forEach(
   $('tCat').onchange=function(){if(this.value!=='__new')return;const n=(prompt('New '+(tType==='income'?'income':'expense')+' category name')||'').trim();const L=tType==='income'?S.cats.income:S.cats.expense;
     if(n&&!L.some(x=>x.toLowerCase()===n.toLowerCase())){L.push(n);save()}setTType(tType);if(n)this.value=L.find(x=>x.toLowerCase()===n.toLowerCase())||L[0];else this.selectedIndex=0};
   $('tAccLbl').textContent=t==='income'?'Received in account *':'Paid from account *';}
-function saveTxn(){
-  const amt=num($('tAmt').value);if(amt<=0)return toast('Enter a valid amount');
+let savingTxn=false;
+async function saveTxn(){
+  if(savingTxn)return;
+  const amt=num($('tAmt').value);if(!(amt>0))return toast('Enter a valid amount');
   const date=$('tDate').value;if(!date)return toast('Select a date');
-  const id=$('tId').value;const o=id?S.txns.find(x=>x.id===id):{id:uid()};
-  Object.assign(o,{type:tType,amount:amt,date,note:$('tNote').value.trim(),mode:$('tMode').value});
-  if(tType==='transfer'){o.from=$('tFrom').value;o.to=$('tTo').value;o.purpose=$('tPurpose').value;delete o.account;delete o.category;if(o.from===o.to)return toast('From and To must be different')}
-  else{o.account=$('tAcc').value;o.category=$('tCat').value;delete o.from;delete o.to;delete o.purpose}
-  if(!id)S.txns.push(o);save();closeM('mTxn');render();toast('Saved');
+  const n={type:tType,amount:amt,date,note:$('tNote').value.trim(),mode:$('tMode').value};
+  if(tType==='transfer'){n.from=$('tFrom').value;n.to=$('tTo').value;n.purpose=$('tPurpose').value;if(!n.from||!n.to)return toast('Choose both accounts');if(n.from===n.to)return toast('From and To must be different')}
+  else{n.account=$('tAcc').value;n.category=$('tCat').value;if(!n.account)return toast('Choose an account');if(!n.category||n.category==='__new')return toast('Choose a category')}
+  const id=$('tId').value;
+  if(id){const o=S.txns.find(x=>x.id===id);if(!o)return toast('This transaction no longer exists');
+    savingTxn=true;const ok=await guard('save changes to a transaction');savingTxn=false;if(!ok)return;
+    ['account','category','from','to','purpose'].forEach(k=>delete o[k]);Object.assign(o,n,{edited:Date.now()})}
+  else S.txns.push(Object.assign({id:uid(),created:Date.now()},n));
+  save();closeM('mTxn');render();toast('Saved');
 }
-function delTxn(id){if(confirm('Delete this transaction?')){S.txns=S.txns.filter(t=>t.id!==id);save();render()}}
+async function delTxn(id){if(!confirm('Delete this transaction?'))return;if(!await guard('delete a transaction'))return;S.txns=S.txns.filter(t=>t.id!==id);save();render();toast('Deleted')}
 function sortedTxns(){return S.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id>a.id?1:-1))}
 function txnTable(list,compact){
   if(!list.length)return'<div class="empty">No transactions yet. Use − Expense, + Income or ⇄ Transfer at the top.</div>';
@@ -1099,7 +1112,7 @@ async function pullCloud(){
 }
 function dl(name,content,type){const b=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function exportJSON(){dl('cashflow-'+SES.user+'-'+today()+'.json',JSON.stringify(S,null,1),'application/json');toast('Backup downloaded')}
-function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts)throw 0;if(!confirm('Replace current data with this backup?'))return;const keep=S.settings;S=normalize(d);S.settings=Object.assign(S.settings,{syncUrl:keep.syncUrl,syncKey:keep.syncKey,name:keep.name,lockMin:keep.lockMin});save();render();toast('Backup restored')}catch(x){toast('Invalid backup file')}};r.readAsText(f);e.target.value=''}
+function importJSON(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.accounts)throw 0;if(!confirm('Replace current data with this backup?'))return;guard('replace data with a backup').then(ok=>{if(!ok)return;const keep=S.settings;S=normalize(d);S.settings=Object.assign(S.settings,{syncUrl:keep.syncUrl,syncKey:keep.syncKey,name:keep.name,lockMin:keep.lockMin});save();render();toast('Backup restored')})}catch(x){toast('Invalid backup file')}};r.readAsText(f);e.target.value=''}
 function exportCSV(){const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const rows=[['Date','Type','Account','From','To','Category/Purpose','Mode','Note','Amount']];sortedTxns().forEach(t=>rows.push([t.date,t.type,t.account?accName(t.account):'',t.from?accName(t.from):'',t.to?accName(t.to):'',t.category||t.purpose||'',t.mode||'',t.note||'',t.amount]));dl('cashflow-transactions-'+today()+'.csv','\ufeff'+rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');toast('CSV downloaded')}
 
 /* ================= SETTINGS ================= */
@@ -1108,14 +1121,15 @@ function saveSettings(){S.settings.name=$('setName').value.trim()||S.settings.na
 function applyTheme(){const t=S?S.settings.theme:(localStorage.getItem('wr_theme')||'dark');localStorage.setItem('wr_theme',t);document.body.classList.toggle('light',t==='light')}
 function toggleTheme(){if(S){S.settings.theme=S.settings.theme==='light'?'dark':'light';save(true)}else localStorage.setItem('wr_theme',localStorage.getItem('wr_theme')==='light'?'dark':'light');applyTheme();if(S)render()}
 $('lPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});$('actKey').addEventListener('keydown',e=>{if(e.key==='Enter')activateKey()});$('sPass2').addEventListener('keydown',e=>{if(e.key==='Enter')doSignup()});
-function wipeAll(){if(confirm('Delete ALL your accounts and transactions?')&&confirm('Are you sure? This cannot be undone.')){const keep=S.settings;S=blank();S.settings=keep;save(true);render();toast('All data deleted')}}
+async function wipeAll(){if(confirm('Delete ALL your accounts and transactions?')&&confirm('Are you sure? This cannot be undone.')&&await guard('delete ALL data')){const keep=S.settings;S=blank();S.settings=keep;save(true);render();toast('All data deleted')}}
 function closeM(id){$(id).classList.remove('show')}
-document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
-document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'))});
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m){if(m.id==='mOtp')otpDone(false);else m.classList.remove('show')}}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('mOtp').classList.contains('show')){otpDone(false);return}if(e.key==='Escape')document.querySelectorAll('.modal-bg.show').forEach(m=>m.classList.remove('show'))});
 
 /* ================= DEMO ================= */
-function loadDemo(){
+async function loadDemo(){
   if(S.accounts.length&&!confirm('Demo data will replace your current data. Continue?'))return;
+  if((S.accounts.length||S.txns.length)&&!await guard('replace your data with demo data'))return;
   const keep=S.settings;S=blank();S.settings=keep;S.txns=[];
   const A=(o)=>{o.id=uid();o.created=today();S.accounts.push(o);return o.id};
   const hdfc=A({type:'bank',name:'HDFC Savings',bank:'HDFC Bank',last4:'4521',opening:185000,color:'#1e40af'});
@@ -1151,6 +1165,20 @@ function loadDemo(){
   T({type:'transfer',amount:28500,date:iso(new Date(new Date().getFullYear(),new Date().getMonth(),Math.min(5,new Date().getDate()))),from:sbi,to:hl,purpose:'Loan EMI',note:'Home loan EMI',mode:'Auto-debit'});
   save();go('dashboard');toast('Demo data loaded');
 }
+
+/* ================= EMAIL OTP GUARD ================= */
+let otpUntil=0,otpRes=null,otpWhat='';
+function guard(what){if(Date.now()<otpUntil)return Promise.resolve(true);
+  if(!SES||!SES.token){toast('Login with internet to make this change');return Promise.resolve(false)}
+  return new Promise(res=>{otpRes=res;otpWhat=what;$('otpCode').value='';$('otpErr').textContent='';$('otpInfo').textContent='Sending a code to '+SES.user+'…';$('mOtp').classList.add('show');otpSend(false)})}
+async function otpSend(again){$('otpResend').disabled=true;setTimeout(()=>{const b=$('otpResend');if(b)b.disabled=false},45000);
+  try{const r=await api('txnOtp',{token:SES.token,what:otpWhat});if(!r.ok){$('otpErr').textContent=r.error||'Could not send code';return}
+    $('otpInfo').textContent=(r.sent?'Code sent to ':'Code already sent to ')+SES.user+'. Enter it to '+otpWhat+'. Check spam if not in inbox.';setTimeout(()=>$('otpCode').focus(),60)}
+  catch(e){$('otpErr').textContent='No internet. A code is needed for this change.'}}
+async function otpVerify(){const c=$('otpCode').value.trim();if(!/^\d{6}$/.test(c))return $('otpErr').textContent='Enter the 6-digit code';
+  try{const r=await api('txnVerify',{token:SES.token,code:c});if(!r.ok)return $('otpErr').textContent=r.error;otpUntil=Date.now()+(r.minutes||10)*60000;otpDone(true);toast('Verified ✓ No code needed for the next 10 minutes')}
+  catch(e){$('otpErr').textContent='No internet'}}
+function otpDone(ok){$('mOtp').classList.remove('show');const f=otpRes;otpRes=null;if(f)f(ok)}
 
 /* ================= CATEGORIES ================= */
 function renderCats(){const ch=(t)=>(S.cats[t]||[]).map((c,i)=>`<span class="chip">${esc(c)}<button title="Rename" onclick="renCat('${t}',${i})">✎</button><button title="Delete" onclick="delCat('${t}',${i})">✕</button></span>`).join('')||'<span style="color:var(--muted)">None yet</span>';

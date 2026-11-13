@@ -60,7 +60,7 @@ function setup(){
 function doGet(e){ return out_({ok:true,app:'CASHFLOW server'}); }
 function doPost(e){
   let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
-  const pub={config,submitUtr,setPassword,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout};
+  const pub={config,submitUtr,setPassword,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout,txnOtp,txnVerify};
   const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject,adminStock};
   const lock=LockService.getScriptLock();
   try{
@@ -100,19 +100,36 @@ function login(b){
   const email=String(b.email||'').trim().toLowerCase(); const u=find_('Users','email',email);
   if(!u) return {ok:false,error:'Wrong email or password'};
   if(u.lockUntil&&new Date(u.lockUntil)>new Date()) return {ok:false,error:'Too many attempts. Try again after a few minutes.'};
+  if(!u.hash) return {ok:false,error:'This account uses Google sign-in. Continue with Google once, then set a password in Settings > Security (or use Forgot password).'};
   if(slow_(b.pwh||'',u.salt)!==u.hash){ const f=Number(u.fails||0)+1; const o={fails:f}; if(f>=5){ const t=new Date(); t.setMinutes(t.getMinutes()+Math.min(60,5*(f-4))); o.lockUntil=t.toISOString(); } upd_('Users',u,o); return {ok:false,error:'Wrong email or password'}; }
   if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
   const o={fails:0,lockUntil:'',lastLogin:new Date().toISOString()}; if(!u.dataKey) o.dataKey=rand_(48);
   upd_('Users',u,o); const v=find_('Users','email',email);
   return Object.assign(me_(v,newSession_(email)),{dataKey:String(v.dataKey)});
 }
-function status(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true}; return me_(u,b.token); }
+function status(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  try{ const s=find_('Sessions','token',b.token); if(s && new Date(s.expires)-new Date() < 20*864e5) upd_('Sessions',s,{expires:new Date(Date.now()+30*864e5).toISOString()}); }catch(x){}
+  return me_(u,b.token); }
+// Email OTP before a transaction is edited or deleted (and before other risky changes)
+function txnOtp(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const c=CacheService.getScriptCache(), e=String(u.email);
+  if(c.get('tcd:'+e)) return {ok:true,sent:false,msg:'Code already sent. Check your email (and spam).'};
+  const code=String(Math.floor(100000+Math.random()*900000)); c.put('totp:'+e,code,600); c.put('ttry:'+e,'0',600); c.put('tcd:'+e,'1',45);
+  MailApp.sendEmail({to:e,subject:setting_('appName','CASHFLOW')+' code to confirm a change: '+code,
+    htmlBody:'<p>Your confirmation code is <b style="font-size:22px;letter-spacing:2px">'+code+'</b></p><p>Someone (hopefully you) is trying to <b>'+String(b.what||'edit or delete a transaction').replace(/[<>]/g,'')+'</b>. The code is valid for 10 minutes.</p><p>If this was not you, change your password now.</p>'});
+  return {ok:true,sent:true}; }
+function txnVerify(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  const c=CacheService.getScriptCache(), e=String(u.email), code=c.get('totp:'+e), tries=Number(c.get('ttry:'+e)||0);
+  if(!code) return {ok:false,error:'Code expired. Send a new one.'};
+  if(String(b.code||'').trim()!==code){ if(tries>=4){ c.remove('totp:'+e); return {ok:false,error:'Too many wrong codes. Send a new one.'}; } c.put('ttry:'+e,String(tries+1),600); return {ok:false,error:'Wrong code ('+(4-tries)+' tries left)'}; }
+  c.remove('totp:'+e); c.remove('tcd:'+e); return {ok:true,minutes:10}; }
 function logout(b){ const s=find_('Sessions','token',b.token||'#'); if(s) sheet_('Sessions').deleteRow(s._row); return {ok:true}; }
 function changePassword(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
   if(slow_(b.oldPwh||'',u.salt)!==u.hash) return {ok:false,error:'Current password is wrong'};
   const salt=rand_(24); upd_('Users',u,{salt,hash:slow_(b.newPwh,salt)}); return {ok:true}; }
 function forgotStart(b){ const email=String(b.email||'').trim().toLowerCase(); const u=find_('Users','email',email);
-  if(u){ const code=String(Math.floor(100000+Math.random()*900000)); CacheService.getScriptCache().put('otp:'+email,code,900);
+  const cd=CacheService.getScriptCache(); if(cd.get('fcd:'+email)) return {ok:false,error:'Code already sent. Wait 1 minute and check spam folder.'};
+  if(u){ cd.put('fcd:'+email,'1',60); const code=String(Math.floor(100000+Math.random()*900000)); cd.put('otp:'+email,code,900);
     MailApp.sendEmail({to:email,subject:setting_('appName','CASHFLOW')+' password reset code',htmlBody:'<p>Your password reset code is <b style="font-size:20px">'+code+'</b></p><p>It is valid for 15 minutes. If you did not ask for this, ignore this email.</p>'}); }
   return {ok:true}; }
 function forgotFinish(b){ const email=String(b.email||'').trim().toLowerCase(); const c=CacheService.getScriptCache(); const code=c.get('otp:'+email);
