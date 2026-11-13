@@ -169,10 +169,19 @@ function normPhone_(v){ let p=String(v||'').replace(/[^0-9+]/g,''); if(/^0[6-9]\
 function googleAuth(b){
   const cid=String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||'');
   if(!cid) return {ok:false,error:'Google login is not switched on yet'};
-  const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(b.idToken||''),{muteHttpExceptions:true});
-  if(r.getResponseCode()!==200) return {ok:false,error:'Google sign-in failed. Please try again.'};
-  const t=JSON.parse(r.getContentText());
-  if(t.aud!==cid||String(t.email_verified)!=='true'||!/accounts\.google\.com$/.test(t.iss||'')) return {ok:false,error:'Google sign-in could not be verified'};
+  let t;
+  if(b.accessToken){
+    const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(b.accessToken),{muteHttpExceptions:true});
+    if(r.getResponseCode()!==200) return {ok:false,error:'Google sign-in failed. Please try again.'};
+    t=JSON.parse(r.getContentText());
+    if((t.aud!==cid&&t.azp!==cid)||String(t.email_verified)!=='true'||!t.email) return {ok:false,error:'Google sign-in could not be verified'};
+    try{const ui=UrlFetchApp.fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+b.accessToken},muteHttpExceptions:true});if(ui.getResponseCode()===200)t.name=JSON.parse(ui.getContentText()).name||'';}catch(e){}
+  } else {
+    const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(b.idToken||''),{muteHttpExceptions:true});
+    if(r.getResponseCode()!==200) return {ok:false,error:'Google sign-in failed. Please try again.'};
+    t=JSON.parse(r.getContentText());
+    if(t.aud!==cid||String(t.email_verified)!=='true'||!/accounts\.google\.com$/.test(t.iss||'')) return {ok:false,error:'Google sign-in could not be verified'};
+  }
   const email=String(t.email).toLowerCase(); let u=find_('Users','email',email), isNew=false;
   if(!u){
     const phone=normPhone_(b.phone); if(!phone) return {ok:true,needPhone:true};

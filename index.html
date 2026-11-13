@@ -557,7 +557,7 @@ const setUsers=u=>localStorage.setItem(USERS,JSON.stringify(u));
 const dataKey=u=>'wr_data_'+u;
 let saveQ=Promise.resolve(),syncTimer=null;
 function save(skipSync){if(!S||!SES)return;S.updated=Date.now();
-  if(CLOUD){cDirty=true;setCS('saving');clearTimeout(cTimer);cTimer=setTimeout(cloudPush,700);if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),2500)}return}
+  if(CLOUD){cDirty=true;ccWrite(true);setCS(navigator.onLine===false?'offline':'saving');clearTimeout(cTimer);cTimer=setTimeout(cloudPush,navigator.onLine===false?1500:400);if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),2500)}return}
   const snap=JSON.parse(JSON.stringify(S));const ses=SES;
   saveQ=saveQ.then(async()=>{const e=await encObj(ses.key,snap);localStorage.setItem(dataKey(ses.user),JSON.stringify(e))}).catch(()=>toast('Save failed'));
   if(!skipSync&&S.settings.sheetId){clearTimeout(syncTimer);syncTimer=setTimeout(()=>gPush(false).catch(()=>{}),1500)}
@@ -586,10 +586,11 @@ async function openLocal(email,secrets,me,fresh){
     if(!data&&!fresh)toast('Old data on this device could not be opened. Load it from your Google Sheet in Backup.')}
   let up=false;CLOUD=false;
   if(me.dataKey&&me.token){try{cKey=await cloudKey(me.dataKey);const rd=await cloudLoad(me.token);
-    if(rd!=='nocloud'){CLOUD=true;if(data&&rd){data=mergeData(normalize(data),normalize(rd));up=true}else if(data)up=true;else data=rd}}
+    if(rd!=='nocloud'){CLOUD=true;const cc=await ccRead(email);if(cc&&cc.data){data=data?mergeData(normalize(data),normalize(cc.data)):cc.data;if(cc.dirty)up=true}
+      if(data&&rd){data=mergeData(normalize(data),normalize(rd));up=true}else if(data)up=true;else data=rd}}
     catch(e){if(!data)throw new Error('Could not load your data from the cloud. Check internet and try again.')}}
   SES={user:email,key,token:me.token,dk:!!me.dataKey};ME=me;S=normalize(data);if(!S.settings.name)S.settings.name=me.name;
-  if(CLOUD){if(up||localStorage.getItem(dataKey(email))){cLocalDel=email;cDirty=true;cloudPush()}}else save(true);
+  if(CLOUD){ccWrite(!!up);if(up||localStorage.getItem(dataKey(email))){cLocalDel=email;cDirty=true;cloudPush()}else setCS('saved')}else save(true);
   await rememberSes();
 }
 async function rememberSes(){try{const k=b64(await crypto.subtle.exportKey('raw',CLOUD?cKey:SES.key));localStorage.setItem('wr_ses',JSON.stringify({email:SES.user,token:SES.token,k,cloud:!!CLOUD,cid:GOOGLE_CLIENT_ID,name:ME.name,sub:ME.sub,google:!!ME.google,dk:SES.dk}))}catch(e){}}
@@ -597,11 +598,15 @@ async function restoreSes(){
   let r;try{r=JSON.parse(localStorage.getItem('wr_ses')||'null')}catch(e){}if(!r||!r.k||!r.email)return false;
   try{const key=await crypto.subtle.importKey('raw',ub64(r.k),{name:'AES-GCM'},true,['encrypt','decrypt']);
     if(r.cid&&!GOOGLE_CLIENT_ID)GOOGLE_CLIENT_ID=r.cid;let data=null;
-    if(r.cloud){CLOUD=true;cKey=key;$('lErr').textContent='Loading your data…';try{data=await cloudLoad(r.token)}catch(e){$('lErr').textContent=String(e.message).includes('expired')?'':'No internet. Connect and reopen the app.';CLOUD=null;cKey=null;return false}
-      if(data==='nocloud'){CLOUD=null;cKey=null;localStorage.removeItem('wr_ses');$('lErr').textContent='';return false}$('lErr').textContent=''}
+    let cc=null;
+    if(r.cloud){CLOUD=true;cKey=key;cc=await ccRead(r.email);
+      if(cc&&cc.data){data=cc.data}
+      else{$('lErr').textContent='Loading your data…';try{data=await cloudLoad(r.token)}catch(e){$('lErr').textContent=String(e.message).includes('expired')?'':'No internet. Connect once to load your data.';CLOUD=null;cKey=null;return false}
+        if(data==='nocloud'){CLOUD=null;cKey=null;localStorage.removeItem('wr_ses');$('lErr').textContent='';return false}$('lErr').textContent='';cc=null}}
     else{const raw=localStorage.getItem(dataKey(r.email));data=raw?await decObj(key,JSON.parse(raw)):null}
     SES={user:r.email,key:r.cloud?null:key,token:r.token,dk:r.dk};ME={ok:true,token:r.token,email:r.email,name:r.name,sub:r.sub,google:r.google};S=normalize(data);
     startApp();
+    if(CLOUD){ccWrite(!!(cc&&cc.dirty));if(cc){if(cc.dirty){cDirty=true;setCS('offline')}else setCS('saved');cloudSync()}else setCS('saved')}
     api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);if(!CLOUD&&me.dataKey)migrateToCloud(me.dataKey,r.token);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
     return true}catch(e){localStorage.removeItem('wr_ses');return false}
 }
@@ -611,13 +616,23 @@ let G_TOK=null;
 function initGoogleLogin(){
   if(!GOOGLE_CLIENT_ID)return;
   if(!(window.google&&google.accounts&&google.accounts.id))return setTimeout(initGoogleLogin,300);
-  google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:r=>googleAuth(r.credential)});
-  document.querySelectorAll('.gbox').forEach(b=>{b.style.display='';google.accounts.id.renderButton(b.querySelector('.gbtn'),{theme:'outline',size:'large',width:300,text:'continue_with',shape:'pill'})});
+  if(!(window.google&&google.accounts&&google.accounts.oauth2))return setTimeout(initGoogleLogin,300);
+  document.querySelectorAll('.gbox').forEach(b=>{b.style.display='';b.querySelector('.gbtn').innerHTML='<button type="button" class="btn ghost" onclick="gStart()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#222;border:1px solid #dadce0;border-radius:999px;font-weight:600"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>'});
 }
-async function googleAuth(idToken,phone){
+/* One tap: sign in + permission for the user's own Google Sheet in the same Google window */
+function gStart(){
+  if(!(window.google&&google.accounts&&google.accounts.oauth2))return toast('Google is loading, try again in a second');
+  const c=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'openid email profile https://www.googleapis.com/auth/drive.file',
+    callback:r=>{if(r.error)return toast('Google sign-in cancelled');
+      if(!google.accounts.oauth2.hasGrantedAllScopes(r,'https://www.googleapis.com/auth/drive.file'))toast('Tip: tick the Google Drive box next time so your Sheet is created automatically');
+      else{gTok=r.access_token;gExp=Date.now()+((r.expires_in||3600)-60)*1000}
+      googleAuth({accessToken:r.access_token})},
+    error_callback:e=>{if(!(e&&e.type==='popup_closed'))toast('Google sign-in failed. Allow pop-ups and try again.')}});
+  c.requestAccessToken({prompt:'select_account'})}
+async function googleAuth(cred,phone){
   const E=m=>{($('authGPhone').style.display===''?$('gErr'):($('authSignup').style.display===''?$('sErr'):$('lErr'))).textContent=m};
-  try{toast('Signing in with Google…');const me=await api('googleAuth',{idToken,phone:phone||''});
-    if(me.needPhone){G_TOK=idToken;['authLogin','authSignup','authForgot'].forEach(i=>$(i).style.display='none');$('authTabs').style.display='none';$('authGPhone').style.display='';return}
+  try{toast('Signing in with Google…');const me=await api('googleAuth',Object.assign({},typeof cred==='string'?{idToken:cred}:cred,{phone:phone||''}));
+    if(me.needPhone){G_TOK=cred;['authLogin','authSignup','authForgot'].forEach(i=>$(i).style.display='none');$('authTabs').style.display='none';$('authGPhone').style.display='';return}
     if(!me.ok)return E(me.error);
     $('authGPhone').style.display='none';$('authTabs').style.display='';
     await afterAuth(me,me.email,me.dataKey,!!me.isNew);toast('Welcome, '+String(me.name||'').split(' ')[0]+'!')}
@@ -629,6 +644,7 @@ async function afterAuth(me,email,pw,fresh){
   if(me.dataKey&&pw&&pw!==me.dataKey)wrapDk(email,pw,me.dataKey).catch(()=>{});
   if(!subActive(me.sub))openGate(false);
   handleReturn();
+  if(me.google&&gTok&&Date.now()<gExp){autoSheet();return}
   const gk='wr_gask_'+email;if(!S.settings.sheetId&&GOOGLE_CLIENT_ID&&!localStorage.getItem(gk)&&!S.accounts.length)setTimeout(()=>{localStorage.setItem(gk,'1');if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
 async function wrapDk(email,pw,dk){const U=getUsers(),rec=U[email];if(!rec)return;rec.ws=rec.ws||b64(rnd(16));rec.wk=await encObj(await pbk(pw,ub64(rec.ws),'key'),{dk});setUsers(U)}
@@ -704,7 +720,7 @@ function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)retur
   if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
   if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
 function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
-function logout(){localStorage.removeItem('wr_ses');if(CLOUD&&(cDirty||cBusy))cloudPush(true);otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;CLOUD=null;cKey=null;cRev=0;cDirty=false;setCS('');$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+function logout(){if(CLOUD&&S)ccWrite(cDirty||cBusy);localStorage.removeItem('wr_ses');if(CLOUD&&(cDirty||cBusy))cloudPush(true);otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;CLOUD=null;cKey=null;cRev=0;cDirty=false;setCS('');$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
 let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
 async function changePass(){
@@ -1031,7 +1047,7 @@ function gAuth(prompt){return new Promise((res,rej)=>{
   if(!GOOGLE_CLIENT_ID)return rej(new Error('Google login is not set up in this copy (seller must add GOOGLE_CLIENT_ID). Use Advanced Apps Script below.'));
   if(!(window.google&&google.accounts&&google.accounts.oauth2))return rej(new Error('Google script not loaded. Check internet.'));
   const c=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file openid email',login_hint:SES.user,
-    callback:r=>{if(r.error)return rej(new Error(r.error));gTok=r.access_token;gExp=Date.now()+((r.expires_in||3600)-60)*1000;S.settings.needReauth=false;res(gTok)},
+    callback:r=>{if(r.error)return rej(new Error(r.error));gTok=r.access_token;gExp=Date.now()+((r.expires_in||3600)-60)*1000;if(S)S.settings.needReauth=false;res(gTok)},
     error_callback:e=>rej(new Error(e&&e.type==='popup_closed'?'Sign-in window closed':'Sign-in failed'))});
   c.requestAccessToken({prompt:prompt||''})})}
 async function gapi(url,opt={}){
@@ -1081,6 +1097,23 @@ async function gBackup(manual){
     S.settings.lastBackup=today();save(true);if(manual)toast('Backup saved to your Google Drive ✓')}
   catch(e){if(manual)toast('Google: '+e.message)}
 }
+/* Automatic: find or create the user's own "CASHFLOW Data" sheet, merge, and keep it saved. No questions. */
+let autoBusy=false;
+async function autoSheet(){if(autoBusy||!S)return;autoBusy=true;
+  try{let id=S.settings.sheetId;
+    if(id){try{const ex=await gapi('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?fields=id,trashed');if(ex.trashed)id=''}catch(e){id=''}}
+    if(!id){const q=encodeURIComponent("name='CASHFLOW Data' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+      const f=await gapi('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id)');
+      if(f.files&&f.files.length)id=f.files[0].id;
+      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_IN',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});id=c.spreadsheetId}}
+    S.settings.sheetId=id;
+    try{const r=await gapi('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/_workrow_db!A:A');const txt=(r.values||[]).map(x=>x[0]).join('');
+      if(txt){const keep=Object.assign({},S.settings);S=normalize(mergeData(S,normalize(JSON.parse(txt))));Object.assign(S.settings,{sheetId:keep.sheetId,lastBackup:keep.lastBackup,backupFolder:keep.backupFolder,lockMin:keep.lockMin,theme:keep.theme})}}catch(e){}
+    save(true);await gPush(false);render();if(view==='backup')renderBackup()}
+  catch(e){S&&(S.settings.needReauth=true)}finally{autoBusy=false}}
+/* Google tokens last 1 hour. Renew quietly on the user's next tap (browsers allow the Google window only on a tap). */
+document.addEventListener('pointerdown',()=>{if(!S||!ME||!ME.google||!GOOGLE_CLIENT_ID||autoBusy)return;if(gTok&&Date.now()<gExp)return;if(!S.settings.sheetId&&localStorage.getItem('wr_gauto_'+SES.user))return;
+  localStorage.setItem('wr_gauto_'+SES.user,'1');gAuth('').then(()=>autoSheet()).catch(()=>{})},true);
 async function gPull(){
   const id=S.settings.sheetId;const r=await gapi('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/_workrow_db!A:A');
   const txt=(r.values||[]).map(x=>x[0]).join('');if(!txt){toast('Your Sheet has no CASHFLOW data yet');return}
@@ -1182,7 +1215,7 @@ const cloudKey=dk=>pbk(dk,te.encode('cashflow-cloud-v1'),'key');
 async function cloudLoad(token){const r=await api('cloudGet',{token});if(!r.ok){if(r.error==='Unknown action')return'nocloud';throw new Error(r.error||'Cloud error')}
   cRev=r.rev||0;return r.data?await decObj(cKey,JSON.parse(r.data)):null}
 async function migrateToCloud(dk,token){try{const k=await cloudKey(dk);const prev=cKey;cKey=k;const rd=await cloudLoad(token);if(rd==='nocloud'){cKey=prev;return}
-  CLOUD=true;S=normalize(mergeData(S,rd&&normalize(rd)));SES.dk=true;cLocalDel=SES.user;cDirty=true;cloudPush();await rememberSes();render()}catch(e){}}
+  CLOUD=true;S=normalize(mergeData(S,rd&&normalize(rd)));SES.dk=true;cLocalDel=SES.user;cDirty=true;ccWrite(true);cloudPush();await rememberSes();render()}catch(e){}}
 function markDel(id){S.deleted=(S.deleted||[]).concat([{id,t:Date.now()}]).slice(-3000)}
 function mergeData(L,Rm){if(!Rm)return L;if(!L)return Rm;const del=new Set([].concat(L.deleted||[],Rm.deleted||[]).map(x=>x.id||x));
   const mg=(a,b)=>{const m=new Map();(b||[]).forEach(x=>m.set(x.id,x));(a||[]).forEach(x=>{const o=m.get(x.id);if(!o||(x.edited||x.created||0)>=(o.edited||o.created||0))m.set(x.id,x)});return[...m.values()].filter(x=>!del.has(x.id))};
@@ -1190,18 +1223,29 @@ function mergeData(L,Rm){if(!Rm)return L;if(!L)return Rm;const del=new Set([].co
   o.cats={expense:[...new Set([].concat(L.cats&&L.cats.expense||[],Rm.cats&&Rm.cats.expense||[]))],income:[...new Set([].concat(L.cats&&L.cats.income||[],Rm.cats&&Rm.cats.income||[]))]};
   o.deleted=[].concat(L.deleted||[],Rm.deleted||[]).slice(-3000);return o}
 function setCS(st){const e=$('cloudSt');if(!e)return;if(!st||!CLOUD){e.style.display='none';return}e.style.display='';
-  e.className='pill '+(st==='saved'?'ok':st==='saving'?'soon':'over');e.textContent=st==='saved'?'☁ Saved':st==='saving'?'☁ Saving…':'⚠ Not saved · no internet'}
+  e.className='pill '+(st==='saved'?'ok':st==='saving'?'soon':'over');e.textContent=st==='saved'?'☁ Saved':st==='saving'?'☁ Saving…':'📱 Saved on phone · uploads when online'}
 async function cloudPush(force){
   if(!CLOUD||!S||!SES||(!cDirty&&!force))return;if(cBusy){cDirty=true;return}
   cBusy=true;cDirty=false;const snap=JSON.parse(JSON.stringify(S)),key=cKey,token=SES.token,base=cRev,snapUser=SES.user;setCS('saving');
   try{const enc=await encObj(key,snap);const r=await api('cloudPut',{token,data:JSON.stringify(enc),baseRev:base});
     if(r.conflict){const rm=r.data?await decObj(key,JSON.parse(r.data)):null;cRev=r.rev;if(S){S=normalize(mergeData(S,rm));cDirty=true;render()}}
-    else if(!r.ok)throw new Error(r.error);else{cRev=r.rev;cFail=0;if(cLocalDel&&cLocalDel===snapUser){localStorage.removeItem(dataKey(cLocalDel));cLocalDel=null}}
+    else if(!r.ok)throw new Error(r.error);else{cRev=r.rev;cFail=0;if(!cDirty)ccWrite(false);if(cLocalDel&&cLocalDel===snapUser){localStorage.removeItem(dataKey(cLocalDel));cLocalDel=null}}
     setCS(cDirty?'saving':'saved')}
-  catch(e){if(S){cDirty=true;setCS('offline');cFail++;clearTimeout(cTimer);cTimer=setTimeout(cloudPush,Math.min(60000,4000*cFail))}}
+  catch(e){if(S){cDirty=true;setCS('offline');cFail++;clearTimeout(cTimer);cTimer=setTimeout(cloudPush,Math.min(15000,2000*cFail))}}
   finally{cBusy=false;if(cDirty&&S&&!cFail){clearTimeout(cTimer);cTimer=setTimeout(cloudPush,300)}}}
-window.addEventListener('beforeunload',e=>{if(CLOUD&&(cDirty||cBusy)){e.preventDefault();e.returnValue=''}});
-window.addEventListener('online',()=>{if(CLOUD&&cDirty){cFail=0;cloudPush()}});
+window.addEventListener('pagehide',()=>{if(CLOUD&&S)ccWrite(cDirty||cBusy)});
+/* Phone copy (encrypted): entries work with no internet, upload the moment internet returns */
+const ccKey=u=>'wr_cc_'+u;
+let ccQ=Promise.resolve();
+function ccWrite(dirty){if(!S||!SES||!cKey)return;const snap=JSON.parse(JSON.stringify(S)),k=cKey,u=SES.user;
+  ccQ=ccQ.then(async()=>{const e=await encObj(k,{data:snap,dirty:!!dirty,t:Date.now()});localStorage.setItem(ccKey(u),JSON.stringify(e))}).catch(()=>{})}
+async function ccRead(u){try{const raw=localStorage.getItem(ccKey(u));return raw?await decObj(cKey,JSON.parse(raw)):null}catch(e){return null}}
+async function cloudSync(){if(!CLOUD||!SES||cBusy)return;try{const rd=await cloudLoad(SES.token);if(rd&&rd!=='nocloud'&&S){const before=JSON.stringify([S.accounts,S.txns]);S=normalize(mergeData(S,normalize(rd)));if(JSON.stringify([S.accounts,S.txns])!==before)render();ccWrite(cDirty)}
+  if(cDirty){cFail=0;cloudPush()}else setCS('saved')}catch(e){if(cDirty)setCS('offline')}}
+function backOnline(){if(!CLOUD||!S)return;cFail=0;clearTimeout(cTimer);if(cDirty)cloudPush();if(S.settings.sheetId&&gTok&&Date.now()<gExp)gPush(false).catch(()=>{})}
+window.addEventListener('online',backOnline);
+window.addEventListener('offline',()=>{if(CLOUD&&S)setCS(cDirty?'offline':'saved')});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&CLOUD&&S&&navigator.onLine!==false)cloudSync()});
 
 /* ================= EMAIL OTP GUARD ================= */
 let otpUntil=0,otpRes=null,otpWhat='';
