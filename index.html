@@ -245,7 +245,7 @@ th,td{padding:9px 5px;font-size:12px}
 
   <main>
     <div class="top">
-      <div><h1 id="vTitle">Dashboard</h1><div class="sub"><span id="vSub"></span> <span id="cloudSt" class="pill" style="font-size:11px;display:none;margin-left:6px"></span></div></div>
+      <div><h1 id="vTitle">Dashboard</h1><div class="sub"><span id="vSub"></span> <span id="cloudSt" class="pill" onclick="cloudTap()" style="font-size:11px;display:none;margin-left:6px;cursor:pointer"></span></div></div>
       <div class="row">
         <button class="btn red" onclick="openTxn('expense')">− Expense</button>
         <button class="btn green" onclick="openTxn('income')">+ Income</button>
@@ -1064,7 +1064,7 @@ async function connectGoogle(){
       const f=await gapi('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id,name)');
       if(f.files&&f.files.length){id=f.files[0].id;S.settings.sheetId=id;save(true);
         if(confirm('Your CASHFLOW sheet already exists. Load your data from it now?\n\nOK = load from Sheet · Cancel = upload this device\'s data')){await gPull();renderBackup();return}}
-      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_IN',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});
+      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_US',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});
         id=c.spreadsheetId;S.settings.sheetId=id;}}
     save(true);await gPush(true);renderBackup()}
   catch(e){toast('Google: '+e.message)}
@@ -1105,7 +1105,7 @@ async function autoSheet(){if(autoBusy||!S)return;autoBusy=true;
     if(!id){const q=encodeURIComponent("name='CASHFLOW Data' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
       const f=await gapi('https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime%20desc&fields=files(id)');
       if(f.files&&f.files.length)id=f.files[0].id;
-      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_IN',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});id=c.spreadsheetId}}
+      else{const c=await gapi('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({properties:{title:'CASHFLOW Data',locale:'en_US',timeZone:'Asia/Kolkata'},sheets:SHEETS.map(t=>({properties:{title:t,hidden:t==='_workrow_db'}}))})});id=c.spreadsheetId}}
     S.settings.sheetId=id;
     try{const r=await gapi('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/_workrow_db!A:A');const txt=(r.values||[]).map(x=>x[0]).join('');
       if(txt){const keep=Object.assign({},S.settings);S=normalize(mergeData(S,normalize(JSON.parse(txt))));Object.assign(S.settings,{sheetId:keep.sheetId,lastBackup:keep.lastBackup,backupFolder:keep.backupFolder,lockMin:keep.lockMin,theme:keep.theme})}}catch(e){}
@@ -1231,8 +1231,10 @@ async function cloudPush(force){
     if(r.conflict){const rm=r.data?await decObj(key,JSON.parse(r.data)):null;cRev=r.rev;if(S){S=normalize(mergeData(S,rm));cDirty=true;render()}}
     else if(!r.ok)throw new Error(r.error);else{cRev=r.rev;cFail=0;if(!cDirty)ccWrite(false);if(cLocalDel&&cLocalDel===snapUser){localStorage.removeItem(dataKey(cLocalDel));cLocalDel=null}}
     setCS(cDirty?'saving':'saved')}
-  catch(e){if(S){cDirty=true;setCS('offline');cFail++;clearTimeout(cTimer);cTimer=setTimeout(cloudPush,Math.min(15000,2000*cFail))}}
+  catch(e){cErr=String(e&&e.message||e);if(S){cDirty=true;setCS('offline');cFail++;if(cFail===3)toast('Upload problem: '+cErr);clearTimeout(cTimer);cTimer=setTimeout(cloudPush,Math.min(15000,2000*cFail))}}
   finally{cBusy=false;if(cDirty&&S&&!cFail){clearTimeout(cTimer);cTimer=setTimeout(cloudPush,300)}}}
+let cErr='';
+function cloudTap(){if(!CLOUD||!S)return;if(cErr&&cDirty)toast('Last upload error: '+cErr+' · retrying…');cFail=0;clearTimeout(cTimer);cloudPush(true)}
 window.addEventListener('pagehide',()=>{if(CLOUD&&S)ccWrite(cDirty||cBusy)});
 /* Phone copy (encrypted): entries work with no internet, upload the moment internet returns */
 const ccKey=u=>'wr_cc_'+u;
