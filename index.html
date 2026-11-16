@@ -540,10 +540,10 @@ const DEF_INC=['Salary','Business income','Interest','Dividend','Rent received',
 
 let S=null;let SES=null; // SES={user,key}
 function blank(){return{accounts:[],txns:[],cats:{expense:DEF_EXP.slice(),income:DEF_INC.slice()},settings:{name:'',theme:localStorage.getItem('wr_theme')||'dark',cur:'₹',syncUrl:'',syncKey:'',syncAuto:'1',lockMin:'0'},updated:Date.now()}}
-function normalize(d){const b=blank();d=d&&d.accounts?d:b;if(d.settings&&!d.settings.lockSet&&d.settings.lockMin==='10')d.settings.lockMin='0';d.txns=d.txns||[];d.cats=d.cats||b.cats;d.settings=Object.assign(b.settings,d.settings||{});return d}
+function normalize(d){const b=blank();d=d&&d.accounts?d:b;if(d.deleted)d.deleted=uniqDel(d.deleted);if(d.settings&&!d.settings.lockSet&&d.settings.lockMin==='10')d.settings.lockMin='0';d.txns=d.txns||[];d.cats=d.cats||b.cats;d.settings=Object.assign(b.settings,d.settings||{});return d}
 /* ---- crypto ---- */
 const te=new TextEncoder(),td=new TextDecoder();
-const b64=u=>btoa(String.fromCharCode(...new Uint8Array(u)));
+const b64=u=>{const a=new Uint8Array(u);let s='';for(let i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));return btoa(s)};
 const ub64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
 async function pbk(pw,salt,usage){const base=await crypto.subtle.importKey('raw',te.encode(pw),'PBKDF2',false,['deriveBits','deriveKey']);
@@ -1216,12 +1216,13 @@ async function cloudLoad(token){const r=await api('cloudGet',{token});if(!r.ok){
   cRev=r.rev||0;return r.data?await decObj(cKey,JSON.parse(r.data)):null}
 async function migrateToCloud(dk,token){try{const k=await cloudKey(dk);const prev=cKey;cKey=k;const rd=await cloudLoad(token);if(rd==='nocloud'){cKey=prev;return}
   CLOUD=true;S=normalize(mergeData(S,rd&&normalize(rd)));SES.dk=true;cLocalDel=SES.user;cDirty=true;ccWrite(true);cloudPush();await rememberSes();render()}catch(e){}}
-function markDel(id){S.deleted=(S.deleted||[]).concat([{id,t:Date.now()}]).slice(-3000)}
+const uniqDel=L=>{const m=new Map();(L||[]).forEach(x=>{const id=x&&x.id||x;if(id&&!m.has(id))m.set(id,typeof x==='object'?x:{id,t:0})});return[...m.values()].slice(-3000)};
+function markDel(id){S.deleted=uniqDel((S.deleted||[]).concat([{id,t:Date.now()}]))}
 function mergeData(L,Rm){if(!Rm)return L;if(!L)return Rm;const del=new Set([].concat(L.deleted||[],Rm.deleted||[]).map(x=>x.id||x));
   const mg=(a,b)=>{const m=new Map();(b||[]).forEach(x=>m.set(x.id,x));(a||[]).forEach(x=>{const o=m.get(x.id);if(!o||(x.edited||x.created||0)>=(o.edited||o.created||0))m.set(x.id,x)});return[...m.values()].filter(x=>!del.has(x.id))};
   const o=Object.assign({},L);o.accounts=mg(L.accounts,Rm.accounts);o.txns=mg(L.txns,Rm.txns);
   o.cats={expense:[...new Set([].concat(L.cats&&L.cats.expense||[],Rm.cats&&Rm.cats.expense||[]))],income:[...new Set([].concat(L.cats&&L.cats.income||[],Rm.cats&&Rm.cats.income||[]))]};
-  o.deleted=[].concat(L.deleted||[],Rm.deleted||[]).slice(-3000);return o}
+  o.deleted=uniqDel([].concat(L.deleted||[],Rm.deleted||[]));return o}
 function setCS(st){const e=$('cloudSt');if(!e)return;if(!st||!CLOUD){e.style.display='none';return}e.style.display='';
   e.className='pill '+(st==='saved'?'ok':st==='saving'?'soon':'over');e.textContent=st==='saved'?'☁ Saved':st==='saving'?'☁ Saving…':'📱 Saved on phone · uploads when online'}
 async function cloudPush(force){
