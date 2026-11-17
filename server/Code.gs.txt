@@ -285,9 +285,9 @@ function googleAuth(b){
   }
   const email=String(t.email).toLowerCase(); let u=find_('Users','email',email), isNew=false;
   if(!u){
-    const phone=normPhone_(b.phone); if(!phone){ if(g){ const pend=rand_(32); CacheService.getScriptCache().put('gp:'+pend,JSON.stringify(g),900); return {ok:true,needPhone:true,pend}; } return {ok:true,needPhone:true}; }
+    const phone=normPhone_(b.phone)||''; if(!phone&&!g){ if(g){ const pend=rand_(32); CacheService.getScriptCache().put('gp:'+pend,JSON.stringify(g),900); return {ok:true,needPhone:true,pend}; } return {ok:true,needPhone:true}; }
     const salt=rand_(24);
-    const nu={email,name:String(t.name||email.split('@')[0]).slice(0,60),salt,hash:sha_(rand_(64)),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:"'"+phone,dataKey:rand_(48),google:'yes'};
+    const nu={email,name:String(t.name||email.split('@')[0]).slice(0,60),salt,hash:sha_(rand_(64)),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:phone?"'"+phone:'',dataKey:rand_(48),google:'yes'};
     const trial=Number(setting_('trialDays',0)); if(trial>0){ nu.planId='trial'; nu.planName='Free trial'; nu.endDate=addDays_(today_(),trial); }
     add_('Users',nu); isNew=true; u=find_('Users','email',email);
   }
