@@ -8,6 +8,7 @@
  *   RAZORPAY_KEY_ID     optional – enables automatic payment links
  *   RAZORPAY_KEY_SECRET optional
  *   APP_URL             your published CASHFLOW link (e.g. https://name.github.io/cashflow/)
+ *   GOOGLE_CLIENT_SECRET  the Client secret of your Google OAuth Web client (saves every user's data to their own Google Drive)
  * Then run  setup()  once, and Deploy > New deployment > Web app
  *   Execute as: Me   ·   Who has access: Anyone
  ******************************************************************/
@@ -62,7 +63,7 @@ function doPost(e){
   let b; try{ b=JSON.parse(e.postData.contents); }catch(x){ return out_({ok:false,error:'Bad request'}); }
   const pub={config,submitUtr,setPassword,googleAuth,signup,login,status,buy,confirmLink,activate,changePassword,forgotStart,forgotFinish,logout,txnOtp,txnVerify};
   const adm={adminLogin,adminData,adminSavePlans,adminSaveSettings,adminIssue,adminExtend,adminBlock,adminRevoke,adminApprove,adminReject,adminStock};
-  if(b.action==='cloudGet'||b.action==='cloudPut'){ try{ return out_(b.action==='cloudGet'?cloudGet(b):cloudPut(b)); }catch(err){ return out_({ok:false,error:String(err.message||err)}); } }
+  if(b.action==='cloudGet'||b.action==='cloudPut'||b.action==='driveLink'||b.action==='driveNow'){ try{ return out_(b.action==='cloudGet'?cloudGet(b):b.action==='cloudPut'?cloudPut(b):b.action==='driveLink'?driveLink(b):driveNow(b)); }catch(err){ return out_({ok:false,error:String(err.message||err)}); } }
   const lock=LockService.getScriptLock();
   try{
     lock.waitLock(25000);
@@ -75,7 +76,7 @@ function doPost(e){
 
 /* ---------- public config ---------- */
 function plans_(all){ return rows_('Plans').filter(p=>all||String(p.active).toLowerCase()!=='no').map(p=>({id:String(p.id),name:p.name,price:Number(p.price),days:Number(p.days),features:p.features,hasLink:!!p.payLink,active:String(p.active).toLowerCase()!=='no'})); }
-function config(){ return {ok:true,plans:plans_(),appName:setting_('appName','CASHFLOW'),supportEmail:setting_('supportEmail',''),supportPhone:setting_('supportPhone',''),announcement:setting_('announcement',''),upiId:setting_('upiId',''),googleClientId:String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||''),cloud:true,upiName:setting_('upiName',''),qrUrl:setting_('qrUrl',''),auto:!!(P.getProperty('RAZORPAY_KEY_ID')&&P.getProperty('RAZORPAY_KEY_SECRET'))}; }
+function config(){ return {ok:true,plans:plans_(),appName:setting_('appName','CASHFLOW'),supportEmail:setting_('supportEmail',''),supportPhone:setting_('supportPhone',''),announcement:setting_('announcement',''),upiId:setting_('upiId',''),googleClientId:String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||''),cloud:true,driveSync:!!P.getProperty('GOOGLE_CLIENT_SECRET'),upiName:setting_('upiName',''),qrUrl:setting_('qrUrl',''),auto:!!(P.getProperty('RAZORPAY_KEY_ID')&&P.getProperty('RAZORPAY_KEY_SECRET'))}; }
 
 /* ---------- accounts ---------- */
 function validEmail_(e){ return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e||''); }
@@ -106,11 +107,11 @@ function login(b){
   if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
   const o={fails:0,lockUntil:'',lastLogin:new Date().toISOString()}; if(!u.dataKey) o.dataKey=rand_(48);
   upd_('Users',u,o); const v=find_('Users','email',email);
-  return Object.assign(me_(v,newSession_(email)),{dataKey:String(v.dataKey)});
+  return Object.assign(me_(v,newSession_(email)),{dataKey:String(v.dataKey),drive:driveInfo_(email)});
 }
 function status(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
   try{ const s=find_('Sessions','token',b.token); if(s && new Date(s.expires)-new Date() < 20*864e5) upd_('Sessions',s,{expires:new Date(Date.now()+30*864e5).toISOString()}); }catch(x){}
-  if(!u.dataKey) upd_('Users',u,{dataKey:rand_(48)}); const v=u.dataKey?u:find_('Users','email',u.email); return Object.assign(me_(v,b.token),{dataKey:String(v.dataKey)}); }
+  if(!u.dataKey) upd_('Users',u,{dataKey:rand_(48)}); const v=u.dataKey?u:find_('Users','email',u.email); return Object.assign(me_(v,b.token),{dataKey:String(v.dataKey),drive:driveInfo_(v.email)}); }
 /* ---------- Cloud copy: each user's data, locked (encrypted in the app), one Drive file per user ---------- */
 function cloudFolder_(){ let id=P.getProperty('CLOUD_FOLDER'); if(id){ try{ const f=DriveApp.getFolderById(id); if(!f.isTrashed()) return f; }catch(x){} }
   const f=DriveApp.createFolder('CASHFLOW User Data (do not delete)'); P.setProperty('CLOUD_FOLDER',f.getId()); return f; }
@@ -122,16 +123,112 @@ function cloudFile_(email,create){ const k='cf:'+cloudName_(email); let id=P.get
   const it=cloudFolder_().getFilesByName(cloudName_(email)); if(it.hasNext()){ const f=it.next(); P.setProperty(k,f.getId()); return f; }
   if(!create) return null; const f=cloudFolder_().createFile(cloudName_(email),'{}','application/json'); P.setProperty(k,f.getId()); return f; }
 function cloudGet(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
-  const f=cloudFile_(u.email,false); if(!f) return {ok:true,rev:0,data:null};
-  let o={}; try{ o=JSON.parse(f.getBlob().getDataAsString()||'{}'); }catch(x){}
-  return {ok:true,rev:Number(o.rev||0),data:o.data||null,updated:o.updated||''}; }
+  const f=cloudFile_(u.email,false); let o={};
+  if(f){ try{ o=JSON.parse(f.getBlob().getDataAsString()||'{}'); }catch(x){} }
+  const res={ok:true,rev:Number(o.rev||0),data:o.data||null,updated:o.updated||'',drive:driveInfo_(u.email)};
+  if(!res.data){ try{ const pl=driveRead_(u.email); if(pl) res.plain=pl; }catch(x){} }  // cloud copy missing: bring the user's data back from their own Drive
+  return res; }
 function cloudPut(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
   if(typeof b.data!=='string'||b.data.length>20e6) return {ok:false,error:'Bad data'};
   const lock=LockService.getUserLock(); try{ lock.waitLock(20000); }catch(x){}
-  try{ const f=cloudFile_(u.email,true); let o={}; try{ o=JSON.parse(f.getBlob().getDataAsString()||'{}'); }catch(x){}
+  let res;
+  try{ const f=cloudFile_(u.email,true); const prev=f.getBlob().getDataAsString()||'{}'; let o={}; try{ o=JSON.parse(prev); }catch(x){}
     const cur=Number(o.rev||0); if(b.baseRev!==undefined&&Number(b.baseRev)!==cur) return {ok:false,conflict:true,rev:cur,data:o.data||null};
-    const rev=cur+1; f.setContent(JSON.stringify({rev,updated:new Date().toISOString(),data:b.data})); return {ok:true,rev}; }
-  finally{ try{lock.releaseLock();}catch(x){} } }
+    if(o.data) keepHistory_(u.email,prev);
+    const rev=cur+1; f.setContent(JSON.stringify({rev,updated:new Date().toISOString(),data:b.data})); res={ok:true,rev}; }
+  finally{ try{lock.releaseLock();}catch(x){} }
+  if(b.mirror) res.drive=driveSave_(u.email,b.mirror);
+  return res; }
+
+/* ---------- Version history (server copy): one snapshot every 15 minutes of saving, last 40 kept per user ---------- */
+function histFolder_(){ let id=P.getProperty('HIST_FOLDER'); if(id){ try{ const f=DriveApp.getFolderById(id); if(!f.isTrashed()) return f; }catch(x){} }
+  const f=cloudFolder_().createFolder('History (do not delete)'); P.setProperty('HIST_FOLDER',f.getId()); return f; }
+function keepHistory_(email,content){ try{ const c=CacheService.getScriptCache(), k='hist:'+cloudName_(email); if(c.get(k)) return; c.put(k,'1',900);
+  const base=cloudName_(email).replace('.json',''), fo=histFolder_();
+  fo.createFile(base+'__'+Utilities.formatDate(new Date(),'Asia/Kolkata','yyyy-MM-dd_HH-mm')+'.json',content,'application/json');
+  const L=[]; const it=fo.searchFiles("title contains '"+base+"__' and trashed=false"); while(it.hasNext()) L.push(it.next());
+  L.sort((a,b)=>b.getName()<a.getName()?-1:1); L.slice(40).forEach(f=>{ try{f.setTrashed(true);}catch(x){} }); }catch(x){} }
+
+/* ---------- Each user's OWN Google Drive (no pop-ups: one Google permission, then the server saves for them) ---------- */
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DSHEETS=['Summary','Accounts','Transactions'];
+function cid_(){ return String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||''); }
+function dKey_(email,k){ return k+':'+cloudName_(email); }
+function driveInfo_(email){ const rt=P.getProperty(dKey_(email,'rt')); if(!rt) return {linked:false,available:!!P.getProperty('GOOGLE_CLIENT_SECRET')};
+  return {linked:true,email:P.getProperty(dKey_(email,'gm'))||'',sheetUrl:P.getProperty(dKey_(email,'su'))||'',last:P.getProperty(dKey_(email,'last'))||'',error:P.getProperty(dKey_(email,'err'))||''}; }
+// Swap the one-time Google code for a long-lasting permission. Returns {email, name, refresh, access, scope} or throws.
+function exchangeCode_(code){ const sec=P.getProperty('GOOGLE_CLIENT_SECRET'); if(!sec) throw new Error('Drive saving is not switched on (GOOGLE_CLIENT_SECRET missing)');
+  const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/token',{method:'post',muteHttpExceptions:true,payload:{code:String(code||''),client_id:cid_(),client_secret:sec,redirect_uri:'postmessage',grant_type:'authorization_code'}});
+  const j=JSON.parse(r.getContentText()||'{}'); if(r.getResponseCode()!==200||!j.access_token) throw new Error('Google sign-in failed ('+(j.error_description||j.error||r.getResponseCode())+'). Please try again.');
+  const ti=JSON.parse(UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(j.access_token),{muteHttpExceptions:true}).getContentText()||'{}');
+  if((ti.aud!==cid_()&&ti.azp!==cid_())||!ti.email||String(ti.email_verified)!=='true') throw new Error('Google sign-in could not be verified');
+  let name=''; try{ const ui=UrlFetchApp.fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+j.access_token},muteHttpExceptions:true}); if(ui.getResponseCode()===200) name=JSON.parse(ui.getContentText()).name||''; }catch(x){}
+  return {email:String(ti.email).toLowerCase(),name,refresh:j.refresh_token||'',access:j.access_token,expires:Number(j.expires_in||3600),scope:String(j.scope||ti.scope||'')}; }
+// Store the permission for this CASHFLOW user. Returns a drive status object.
+function linkDrive_(email,g){ if(g.scope.indexOf(DRIVE_SCOPE)<0) return {linked:false,missingScope:true};
+  if(!g.refresh&&!P.getProperty(dKey_(email,'rt'))){ try{ UrlFetchApp.fetch('https://oauth2.googleapis.com/revoke?token='+encodeURIComponent(g.access),{method:'post',muteHttpExceptions:true}); }catch(x){} return {linked:false,again:true}; }
+  if(g.refresh) P.setProperty(dKey_(email,'rt'),g.refresh); P.setProperty(dKey_(email,'gm'),g.email); P.deleteProperty(dKey_(email,'err'));
+  CacheService.getScriptCache().put(dKey_(email,'at'),g.access,Math.max(60,g.expires-300)); return driveInfo_(email); }
+function driveLink(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
+  try{ const g=exchangeCode_(b.code); const d=linkDrive_(u.email,g); if(d.missingScope) return {ok:false,error:'Please tick the Google Drive box so CASHFLOW can save to your Drive'}; if(d.again) return {ok:false,again:true,error:'Google needs one more tap. Press Connect Google Drive again.'};
+    if(b.mirror) d.save=driveSave_(u.email,b.mirror); return {ok:true,drive:driveInfo_(u.email)}; }
+  catch(e){ return {ok:false,error:String(e.message||e)}; } }
+function driveNow(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true}; if(!b.mirror) return {ok:false,error:'Nothing to save'};
+  const r=driveSave_(u.email,b.mirror); return {ok:r==='ok',drive:driveInfo_(u.email),error:r==='ok'?'':r}; }
+function access_(email){ const c=CacheService.getScriptCache(), k=dKey_(email,'at'); const t=c.get(k); if(t) return t;
+  const rt=P.getProperty(dKey_(email,'rt')); if(!rt) return null;
+  const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/token',{method:'post',muteHttpExceptions:true,payload:{client_id:cid_(),client_secret:P.getProperty('GOOGLE_CLIENT_SECRET')||'',refresh_token:rt,grant_type:'refresh_token'}});
+  const j=JSON.parse(r.getContentText()||'{}');
+  if(!j.access_token){ if(j.error==='invalid_grant'){ P.deleteProperty(dKey_(email,'rt')); throw new Error('relink'); } throw new Error('Google: '+(j.error_description||j.error||r.getResponseCode())); }
+  c.put(k,j.access_token,Math.max(60,Number(j.expires_in||3600)-300)); return j.access_token; }
+function g_(email,url,opt){ const o=Object.assign({muteHttpExceptions:true,contentType:'application/json'},opt||{}); o.headers=Object.assign({Authorization:'Bearer '+access_(email)},o.headers||{});
+  const r=UrlFetchApp.fetch(url,o), code=r.getResponseCode(), txt=r.getContentText();
+  if(code===401){ CacheService.getScriptCache().remove(dKey_(email,'at')); throw new Error('Google session refresh needed'); }
+  if(code===404) return null; if(code>=300){ let m=''; try{ m=JSON.parse(txt).error.message; }catch(x){ m='HTTP '+code; } throw new Error(m); }
+  return txt?JSON.parse(txt):{}; }
+function alive_(email,id){ const c=CacheService.getScriptCache(); if(c.get('ok:'+id)) return true; const f=g_(email,'https://www.googleapis.com/drive/v3/files/'+id+'?fields=id,trashed'); const ok=!!(f&&!f.trashed); if(ok) c.put('ok:'+id,'1',21600); return ok; }
+function folderId_(email){ let id=P.getProperty(dKey_(email,'fo'));
+  if(id&&alive_(email,id)) return id;
+  const f=g_(email,'https://www.googleapis.com/drive/v3/files?fields=id',{method:'post',payload:JSON.stringify({name:'CASHFLOW',mimeType:'application/vnd.google-apps.folder'})});
+  P.setProperty(dKey_(email,'fo'),f.id); return f.id; }
+function upload_(email,fileId,name,parent,text){ const bd='cfb'+Date.now(), meta=fileId?{}:{name,parents:[parent],mimeType:'application/json'};
+  const body='--'+bd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+bd+'\r\nContent-Type: application/json\r\n\r\n'+text+'\r\n--'+bd+'--';
+  const url=fileId?'https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart&fields=id':'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+  return g_(email,url,{method:fileId?'patch':'post',contentType:'multipart/related; boundary='+bd,payload:Utilities.newBlob(body).getBytes()}); }
+// Save the user's data into THEIR Drive: CASHFLOW/CASHFLOW Data.json (full data), "CASHFLOW Data" Google Sheet (readable), daily backups (last 30).
+function driveSave_(email,m){
+  if(!P.getProperty(dKey_(email,'rt'))) return 'not linked';
+  try{ const data=String(m.json||''); if(!data||data.charAt(0)!=='{') return 'bad data';
+    const fo=folderId_(email);
+    let jid=P.getProperty(dKey_(email,'js')); if(jid&&!alive_(email,jid)) jid='';
+    let up=upload_(email,jid,'CASHFLOW Data.json',fo,data); if(!up&&jid){ jid=''; up=upload_(email,'','CASHFLOW Data.json',fo,data); } if(!jid&&up) P.setProperty(dKey_(email,'js'),up.id);
+    const day=today_(); if(P.getProperty(dKey_(email,'bk'))!==day){ dailyBackup_(email,fo,data,day); P.setProperty(dKey_(email,'bk'),day); }
+    if(m.tables) sheetSave_(email,fo,m.tables);
+    P.setProperty(dKey_(email,'last'),new Date().toISOString()); P.deleteProperty(dKey_(email,'err')); return 'ok'; }
+  catch(e){ const msg=String(e.message||e); P.setProperty(dKey_(email,'err'),msg.slice(0,200)); return msg==='relink'?'relink':msg; } }
+function dailyBackup_(email,fo,data,day){
+  let bf=P.getProperty(dKey_(email,'bf')); if(bf){ const f=g_(email,'https://www.googleapis.com/drive/v3/files/'+bf+'?fields=id,trashed'); if(!f||f.trashed) bf=''; }
+  if(!bf){ bf=g_(email,'https://www.googleapis.com/drive/v3/files?fields=id',{method:'post',payload:JSON.stringify({name:'Daily Backups',parents:[fo],mimeType:'application/vnd.google-apps.folder'})}).id; P.setProperty(dKey_(email,'bf'),bf); }
+  upload_(email,'','CASHFLOW Backup '+day+'.json',bf,data);
+  const L=g_(email,'https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent("'"+bf+"' in parents and trashed=false")+'&orderBy=createdTime%20desc&pageSize=100&fields=files(id)')||{};
+  (L.files||[]).slice(30).forEach(f=>{ try{ g_(email,'https://www.googleapis.com/drive/v3/files/'+f.id,{method:'delete'}); }catch(x){} }); }
+function sheetSave_(email,fo,t){
+  let sid=P.getProperty(dKey_(email,'sh')); if(sid&&!alive_(email,sid)) sid='';
+  if(!sid){ const c=g_(email,'https://www.googleapis.com/drive/v3/files?fields=id,webViewLink',{method:'post',payload:JSON.stringify({name:'CASHFLOW Data',mimeType:'application/vnd.google-apps.spreadsheet',parents:[fo]})});
+    sid=c.id; P.setProperty(dKey_(email,'sh'),sid); P.setProperty(dKey_(email,'su'),c.webViewLink||''); }
+  const base='https://sheets.googleapis.com/v4/spreadsheets/'+sid, need={Summary:(t.summary||[]).length,Accounts:(t.accounts||[]).length,Transactions:(t.txns||[]).length};
+  const meta=g_(email,base+'?fields=sheets.properties')||{}; const have={}; (meta.sheets||[]).forEach(x=>have[x.properties.title]=x.properties); const reqs=[];
+  DSHEETS.forEach(n=>{ if(!have[n]) reqs.push({addSheet:{properties:{title:n,gridProperties:{rowCount:Math.max(1000,need[n]+50),columnCount:20}}}});
+    else if(have[n].gridProperties.rowCount<need[n]+5) reqs.push({updateSheetProperties:{properties:{sheetId:have[n].sheetId,gridProperties:{rowCount:need[n]+500}},fields:'gridProperties.rowCount'}}); });
+  if(reqs.length&&have['Sheet1']) reqs.push({deleteSheet:{sheetId:have['Sheet1'].sheetId}});
+  if(reqs.length) g_(email,base+':batchUpdate',{method:'post',payload:JSON.stringify({requests:reqs})});
+  g_(email,base+'/values:batchClear',{method:'post',payload:JSON.stringify({ranges:DSHEETS})});
+  g_(email,base+'/values:batchUpdate',{method:'post',payload:JSON.stringify({valueInputOption:'RAW',data:[{range:'Summary!A1',values:t.summary||[[]]},{range:'Accounts!A1',values:t.accounts||[[]]},{range:'Transactions!A1',values:t.txns||[[]]}]})}); }
+// Read the user's data back from THEIR Drive (used only if the server copy is missing).
+function driveRead_(email){ const jid=P.getProperty(dKey_(email,'js')); if(!jid||!P.getProperty(dKey_(email,'rt'))) return null;
+  const r=UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/'+jid+'?alt=media',{headers:{Authorization:'Bearer '+access_(email)},muteHttpExceptions:true});
+  return r.getResponseCode()===200?r.getContentText():null; }
+
 // Email OTP before a transaction is edited or deleted (and before other risky changes)
 function txnOtp(b){ const u=session_(b.token); if(!u) return {ok:false,error:'Session expired',relogin:true};
   const c=CacheService.getScriptCache(), e=String(u.email);
@@ -169,8 +266,12 @@ function normPhone_(v){ let p=String(v||'').replace(/[^0-9+]/g,''); if(/^0[6-9]\
 function googleAuth(b){
   const cid=String(setting_('googleClientId','')||P.getProperty('GOOGLE_CLIENT_ID')||'');
   if(!cid) return {ok:false,error:'Google login is not switched on yet'};
-  let t;
-  if(b.accessToken){
+  let t, g=null;
+  if(b.code||b.pend){
+    try{ if(b.pend){ g=JSON.parse(CacheService.getScriptCache().get('gp:'+b.pend)||'null'); if(!g) return {ok:false,error:'Please press Continue with Google again'}; } else g=exchangeCode_(b.code); }
+    catch(e){ return {ok:false,error:String(e.message||e)}; }
+    t={email:g.email,name:g.name,email_verified:'true'};
+  } else if(b.accessToken){
     const r=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(b.accessToken),{muteHttpExceptions:true});
     if(r.getResponseCode()!==200) return {ok:false,error:'Google sign-in failed. Please try again.'};
     t=JSON.parse(r.getContentText());
@@ -184,7 +285,7 @@ function googleAuth(b){
   }
   const email=String(t.email).toLowerCase(); let u=find_('Users','email',email), isNew=false;
   if(!u){
-    const phone=normPhone_(b.phone); if(!phone) return {ok:true,needPhone:true};
+    const phone=normPhone_(b.phone); if(!phone){ if(g){ const pend=rand_(32); CacheService.getScriptCache().put('gp:'+pend,JSON.stringify(g),900); return {ok:true,needPhone:true,pend}; } return {ok:true,needPhone:true}; }
     const salt=rand_(24);
     const nu={email,name:String(t.name||email.split('@')[0]).slice(0,60),salt,hash:sha_(rand_(64)),created:new Date().toISOString(),planId:'',planName:'',endDate:'',blocked:'',fails:0,lockUntil:'',lastLogin:new Date().toISOString(),phone:"'"+phone,dataKey:rand_(48),google:'yes'};
     const trial=Number(setting_('trialDays',0)); if(trial>0){ nu.planId='trial'; nu.planName='Free trial'; nu.endDate=addDays_(today_(),trial); }
@@ -193,7 +294,8 @@ function googleAuth(b){
   if(String(u.blocked)==='yes') return {ok:false,error:'This account is blocked. Contact support.'};
   const o={lastLogin:new Date().toISOString(),google:'yes'}; if(!u.dataKey) o.dataKey=rand_(48); if(!u.phone&&normPhone_(b.phone)) o.phone="'"+normPhone_(b.phone);
   upd_('Users',u,o); u=find_('Users','email',email);
-  return Object.assign(me_(u,newSession_(email)),{dataKey:String(u.dataKey),isNew});
+  let drive=null; if(g){ try{ drive=linkDrive_(email,g); }catch(e){ drive={linked:false,error:String(e.message||e)}; } }
+  return Object.assign(me_(u,newSession_(email)),{dataKey:String(u.dataKey),isNew,drive:drive&&drive.linked?drive:Object.assign(driveInfo_(email),drive||{})});
 }
 
 /* ---------- buying ---------- */

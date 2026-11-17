@@ -570,7 +570,7 @@ async function api(action,data){
   const j=await r.json();if(j.relogin&&S){toast('Session expired, please login again');logout()}return j}
 async function sha256hex(t){return[...new Uint8Array(await crypto.subtle.digest('SHA-256',te.encode(t)))].map(b=>b.toString(16).padStart(2,'0')).join('')}
 const pwHash=(email,pw)=>sha256hex('workrow|'+email+'|'+pw);
-function applyCfg(c){if(!c)return;if(c.googleClientId&&c.googleClientId!==GOOGLE_CLIENT_ID){GOOGLE_CLIENT_ID=c.googleClientId;try{initGoogleLogin()}catch(e){}}['plans','appName','announcement','supportEmail','supportPhone','auto','upiId','upiName','qrUrl'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
+function applyCfg(c){if(!c)return;if(c.googleClientId&&c.googleClientId!==GOOGLE_CLIENT_ID){GOOGLE_CLIENT_ID=c.googleClientId;try{initGoogleLogin()}catch(e){}}['plans','appName','announcement','supportEmail','supportPhone','auto','upiId','upiName','qrUrl','driveSync'].forEach(k=>{if(c[k]!==undefined)CFG[k]=c[k]});if(c.drive)setDrive(c.drive);$('authApp').textContent=CFG.appName||'CASHFLOW';const b=$('annBanner');if(CFG.announcement){b.textContent='📢 '+CFG.announcement;b.style.display=''}else b.style.display='none'}
 const subActive=sub=>!!(sub&&sub.endDate&&sub.endDate>=today()&&!sub.blocked);
 /* ---- auth ---- */
 function authTab(t){document.querySelectorAll('#authTabs button').forEach(b=>b.classList.toggle('on',b.dataset.a===t));$('authLogin').style.display=t==='login'?'':'none';$('authSignup').style.display=t==='signup'?'':'none';$('authForgot').style.display=t==='forgot'?'':'none';$('lErr').textContent=$('sErr').textContent=$('fErr').textContent=''}
@@ -607,7 +607,7 @@ async function restoreSes(){
     SES={user:r.email,key:r.cloud?null:key,token:r.token,dk:r.dk};ME={ok:true,token:r.token,email:r.email,name:r.name,sub:r.sub,google:r.google};S=normalize(data);
     startApp();
     if(CLOUD){ccWrite(!!(cc&&cc.dirty));if(cc){if(cc.dirty){cDirty=true;setCS('offline')}else setCS('saved');cloudSync()}else setCS('saved')}
-    api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);if(!CLOUD&&me.dataKey)migrateToCloud(me.dataKey,r.token);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
+    api('status',{token:r.token}).then(me=>{if(!me||!me.ok)return;ME=Object.assign(me,{token:r.token});applyCfg(me);driveCatchUp();if(!CLOUD&&me.dataKey)migrateToCloud(me.dataKey,r.token);const U=getUsers();if(U[r.email]){U[r.email].sub=me.sub;U[r.email].checked=Date.now();setUsers(U)}rememberSes();renderSub();if(!subActive(me.sub))openGate(false);handleReturn()}).catch(()=>{if(!subActive(r.sub))openGate(false)});
     return true}catch(e){localStorage.removeItem('wr_ses');return false}
 }
 
@@ -622,6 +622,9 @@ function initGoogleLogin(){
 /* One tap: sign in + permission for the user's own Google Sheet in the same Google window */
 function gStart(){
   if(!(window.google&&google.accounts&&google.accounts.oauth2))return toast('Google is loading, try again in a second');
+  if(CFG.driveSync){google.accounts.oauth2.initCodeClient({client_id:GOOGLE_CLIENT_ID,scope:'openid email profile '+DRIVE_SCOPE,ux_mode:'popup',select_account:true,
+    callback:r=>{if(r.error||!r.code)return toast('Google sign-in cancelled');if(!String(r.scope||'').includes(DRIVE_SCOPE))toast('Tip: tick the Google Drive box so your data saves to your own Drive');googleAuth({code:r.code})},
+    error_callback:e=>{if(!(e&&e.type==='popup_closed'))toast('Google sign-in failed. Allow pop-ups and try again.')}}).requestCode();return}
   const c=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'openid email profile https://www.googleapis.com/auth/drive.file',
     callback:r=>{if(r.error)return toast('Google sign-in cancelled');
       if(!google.accounts.oauth2.hasGrantedAllScopes(r,'https://www.googleapis.com/auth/drive.file'))toast('Tip: tick the Google Drive box next time so your Sheet is created automatically');
@@ -632,18 +635,20 @@ function gStart(){
 async function googleAuth(cred,phone){
   const E=m=>{($('authGPhone').style.display===''?$('gErr'):($('authSignup').style.display===''?$('sErr'):$('lErr'))).textContent=m};
   try{toast('Signing in with Google…');const me=await api('googleAuth',Object.assign({},typeof cred==='string'?{idToken:cred}:cred,{phone:phone||''}));
-    if(me.needPhone){G_TOK=cred;['authLogin','authSignup','authForgot'].forEach(i=>$(i).style.display='none');$('authTabs').style.display='none';$('authGPhone').style.display='';return}
+    if(me.needPhone){G_TOK=me.pend?{pend:me.pend}:cred;['authLogin','authSignup','authForgot'].forEach(i=>$(i).style.display='none');$('authTabs').style.display='none';$('authGPhone').style.display='';return}
     if(!me.ok)return E(me.error);
+    if(me.drive&&me.drive.again)setTimeout(()=>toast('Google Drive needs one more tap: More > Backup > Connect Google Drive'),2500);
     $('authGPhone').style.display='none';$('authTabs').style.display='';
     await afterAuth(me,me.email,me.dataKey,!!me.isNew);toast('Welcome, '+String(me.name||'').split(' ')[0]+'!')}
   catch(e){E(e.message.includes('fetch')?'No internet connection':e.message)}
 }
 function googleFinish(){const p=normPhone($('gPhone').value);if(!p)return $('gErr').textContent='Enter your 10-digit mobile number';$('gBtn').disabled=true;googleAuth(G_TOK,p).finally(()=>$('gBtn').disabled=false)}
 async function afterAuth(me,email,pw,fresh){
-  applyCfg(me);await openLocal(email,me.dataKey?[me.dataKey,pw]:[pw],me,fresh);startApp();
+  applyCfg(me);await openLocal(email,me.dataKey?[me.dataKey,pw]:[pw],me,fresh);startApp();setTimeout(driveCatchUp,3000);
   if(me.dataKey&&pw&&pw!==me.dataKey)wrapDk(email,pw,me.dataKey).catch(()=>{});
   if(!subActive(me.sub))openGate(false);
   handleReturn();
+  if(CFG.driveSync)return;
   if(me.google&&gTok&&Date.now()<gExp){autoSheet();return}
   const gk='wr_gask_'+email;if(!S.settings.sheetId&&GOOGLE_CLIENT_ID&&!localStorage.getItem(gk)&&!S.accounts.length)setTimeout(()=>{localStorage.setItem(gk,'1');if(S&&confirm('Link your Google account now? Your data will be saved to your own Google Sheet and you can open it on any device.')){go('backup');connectGoogle()}},800);
 }
@@ -719,8 +724,8 @@ setInterval(()=>{if(S)refreshSub()},30*60000);
 function renderSub(){const sub=(ME&&ME.sub)||{};const c=$('subChip');if(!c)return;
   if(subActive(sub)){const d=daysBetween(pd(today()),pd(sub.endDate));c.innerHTML=`⭐ ${esc(sub.planName)} · ${d<=7?'<b class="warn">'+d+' days left</b>':'till '+dfmt(sub.endDate)}`}else c.innerHTML='<b class="neg">No active plan</b>';
   if($('licInfo'))$('licInfo').innerHTML=`<div>Email: <b>${esc(SES.user)}</b></div><div>Plan: <b>${esc(sub.planName||'-')}</b></div><div>Valid till: <b>${sub.endDate?dfmt(sub.endDate):'-'}</b></div><div>Status: <b class="${subActive(sub)?'pos':'neg'}">${subActive(sub)?'Active ✓':(sub.blocked?'Blocked':'Not active')}</b></div><div style="color:var(--muted);font-size:12px">App version ${APP_VERSION}</div>`}
-function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock()}
-function logout(){if(CLOUD&&S)ccWrite(cDirty||cBusy);localStorage.removeItem('wr_ses');if(CLOUD&&(cDirty||cBusy))cloudPush(true);otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;CLOUD=null;cKey=null;cRev=0;cDirty=false;setCS('');$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
+function startApp(){$('auth').style.display='none';applyTheme();go('dashboard');renderSub();armLock();if(DRIVE)driveUI()}
+function logout(){DRIVE=null;{const b=$('driveBanner');if(b)b.style.display='none'}if(CLOUD&&S)ccWrite(cDirty||cBusy);localStorage.removeItem('wr_ses');if(CLOUD&&(cDirty||cBusy))cloudPush(true);otpUntil=0;if(otpRes)otpDone(false);clearTimeout(syncTimer);clearTimeout(idleT);if(S&&S.settings.sheetId&&gTok)gPush(false).catch(()=>{});else if(S&&S.settings.syncUrl&&S.settings.syncAuto==='1')pushCloud(false);if(SES&&SES.token)api('logout',{token:SES.token}).catch(()=>{});gTok=null;S=null;SES=null;ME=null;CLOUD=null;cKey=null;cRev=0;cDirty=false;setCS('');$('gate').style.display='none';document.querySelectorAll('.modal-bg.show,.more.show').forEach(m=>m.classList.remove('show'));['dashStats','dashTiles','dashDues','dashRecent','accList','txnTable','txnSummary'].forEach(i=>$(i).innerHTML='');$('auth').style.display='flex';authTab('login')}
 let idleT=null;function armLock(){clearTimeout(idleT);if(!S)return;const m=+S.settings.lockMin;if(m>0)idleT=setTimeout(()=>{logout();toast('Locked for your safety')},m*60000)}
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev,()=>{if(S)armLock()},{passive:true}));
 async function changePass(){
@@ -1070,6 +1075,7 @@ async function connectGoogle(){
   catch(e){toast('Google: '+e.message)}
 }
 async function gPush(manual){
+  if(CFG.driveSync){if(manual)driveNow();return}
   const id=S&&S.settings.sheetId;if(!id){if(manual)toast('Connect Google first');return}
   if(!gTok||Date.now()>gExp){if(!manual){S.settings.needReauth=true;if(view==='backup')renderBackup();return}}
   try{const base='https://sheets.googleapis.com/v4/spreadsheets/'+id;const t=sheetTables(true);
@@ -1112,7 +1118,7 @@ async function autoSheet(){if(autoBusy||!S)return;autoBusy=true;
     save(true);await gPush(false);render();if(view==='backup')renderBackup()}
   catch(e){S&&(S.settings.needReauth=true)}finally{autoBusy=false}}
 /* Google tokens last 1 hour. Renew quietly on the user's next tap (browsers allow the Google window only on a tap). */
-document.addEventListener('pointerdown',()=>{if(!S||!ME||!ME.google||!GOOGLE_CLIENT_ID||autoBusy)return;if(gTok&&Date.now()<gExp)return;if(!S.settings.sheetId&&localStorage.getItem('wr_gauto_'+SES.user))return;
+document.addEventListener('pointerdown',()=>{if(CFG.driveSync||!S||!ME||!ME.google||!GOOGLE_CLIENT_ID||autoBusy)return;if(gTok&&Date.now()<gExp)return;if(!S.settings.sheetId&&localStorage.getItem('wr_gauto_'+SES.user))return;
   localStorage.setItem('wr_gauto_'+SES.user,'1');gAuth('').then(()=>autoSheet()).catch(()=>{})},true);
 async function gPull(){
   const id=S.settings.sheetId;const r=await gapi('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/_workrow_db!A:A');
@@ -1121,7 +1127,32 @@ async function gPull(){
   S.settings.lastSync=Date.now();save(true);render();toast('Loaded from your Google Sheet ✓')}
 async function gPullAsk(){if(!S.settings.sheetId)return toast('Connect Google first');if(confirm('Replace this device\'s data with your Google Sheet copy?'))try{await gPull()}catch(e){toast('Google: '+e.message)}}
 function gUnlink(){if(!S.settings.sheetId)return;if(confirm('Stop syncing with your Google Sheet? The sheet stays in your Drive.')){S.settings.sheetId='';gTok=null;save(true);renderBackup()}}
-function renderGoogle(){const id=S.settings.sheetId;const b=$('gBadge');
+/* ---- Each user's OWN Google Drive, saved by the server (no pop-ups after the first permission) ---- */
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let DRIVE=null;
+function setDrive(d){DRIVE=Object.assign({},DRIVE||{},d||{});driveUI()}
+function driveResult(r){if(r==='ok'){setDrive({last:new Date().toISOString(),error:''})}else if(r==='relink'||r==='not linked'){setDrive({linked:false,error:''});toast('Google Drive permission ended. Tap Connect Google Drive to resume.')}else setDrive({error:String(r)})}
+function mirrorOf(snap){const c=JSON.parse(JSON.stringify(snap));c.settings.syncKey='';c.settings.syncUrl='';return{json:JSON.stringify(c),tables:sheetTables(true)}}
+function driveConnect(){
+  if(!CFG.driveSync)return toast('Drive saving is not switched on yet');
+  if(!(window.google&&google.accounts&&google.accounts.oauth2))return toast('Google is loading, try again in a second');
+  google.accounts.oauth2.initCodeClient({client_id:GOOGLE_CLIENT_ID,scope:'openid email '+DRIVE_SCOPE,ux_mode:'popup',login_hint:SES.user,select_account:true,
+    callback:async r=>{if(r.error||!r.code)return toast('Cancelled');if(!String(r.scope||'').includes(DRIVE_SCOPE))return toast('Please tick the Google Drive box');
+      toast('Connecting your Google Drive…');try{const x=await api('driveLink',{token:SES.token,code:r.code,mirror:mirrorOf(S)});if(!x.ok)return toast(x.error);setDrive(x.drive);toast('✓ Your data now saves to your own Google Drive')}catch(e){toast('No internet connection')}},
+    error_callback:e=>{if(!(e&&e.type==='popup_closed'))toast('Google window blocked. Allow pop-ups and try again.')}}).requestCode()}
+async function driveNow(){if(!(DRIVE&&DRIVE.linked))return driveConnect();toast('Saving to your Google Drive…');
+  try{const x=await api('driveNow',{token:SES.token,mirror:mirrorOf(S)});if(x.drive)setDrive(x.drive);toast(x.ok?'Saved to your Google Drive ✓':'Google Drive: '+x.error)}catch(e){toast('No internet connection')}}
+function driveCatchUp(){if(!S||!SES||!(DRIVE&&DRIVE.linked))return;if(DRIVE.last&&!(S.updated>Date.parse(DRIVE.last)))return;api('driveNow',{token:SES.token,mirror:mirrorOf(S)}).then(x=>{if(x&&x.drive)setDrive(x.drive)}).catch(()=>{})}
+function driveUI(){if(!S||!CFG.driveSync)return;
+  let b=$('driveBanner');if(!b){b=document.createElement('div');b.id='driveBanner';b.className='banner';b.style.cssText='margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap';const d=$('v-dashboard');if(d)d.insertBefore(b,d.firstChild)}
+  if(DRIVE&&DRIVE.linked){b.style.display='none'}else{b.style.display='flex';b.innerHTML='<span style="flex:1;min-width:200px">☁ Keep your own copy in <b>your Google Drive</b>. One tap, then it saves automatically.</span><button class="btn sm" onclick="driveConnect()">Connect Google Drive</button>'}
+  if(view==='backup')renderGoogle()}
+function renderGoogle(){if(CFG.driveSync){const c=$('gCard'),L=DRIVE&&DRIVE.linked;
+    c.innerHTML=`<h3>📗 Your Google Drive <span class="pill ${L?(DRIVE.error?'soon':'ok'):'later'}">${L?(DRIVE.error?'Retrying':'Auto-saving ✓'):'Not connected'}</span></h3>
+    <p style="color:var(--muted);margin-bottom:12px">${L?`Every entry is saved to <b>${esc(DRIVE.email||SES.user)}</b> Google Drive, folder <b>CASHFLOW</b>: your full data file, a readable Google Sheet "CASHFLOW Data", and a daily backup (last 30 days). ${DRIVE.last?'Last saved: '+new Date(DRIVE.last).toLocaleString('en-IN')+'.':''}${DRIVE.error?'<br><span class="warn">Last problem: '+esc(DRIVE.error)+'</span>':''}`:'Connect once with the Google account you use. After that CASHFLOW saves every entry to <b>your own</b> Google Drive automatically. No more connecting again.'}</p>
+    <div class="row"><button class="btn" onclick="driveConnect()">🔗 ${L?'Reconnect':'Connect'} Google Drive</button>${L?'<button class="btn green" onclick="driveNow()">⬆ Save now</button>':''}${L&&DRIVE.sheetUrl?`<a class="btn ghost" href="${esc(DRIVE.sheetUrl)}" target="_blank" rel="noopener" style="text-decoration:none">Open my Sheet ↗</a>`:''}</div>`;return}
+  renderGoogle0()}
+function renderGoogle0(){const id=S.settings.sheetId;const b=$('gBadge');
   if(!id){b.className='pill later';b.textContent='Not linked'}else if(S.settings.needReauth||!gTok){b.className='pill soon';b.textContent='Linked · press Connect to resume'}else{b.className='pill ok';b.textContent='Auto-saving ✓'}
   const o=$('gOpen');if(id){o.style.display='';o.href='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(id)+'/edit'}else o.style.display='none';
   if(!GOOGLE_CLIENT_ID)$('gInfo').innerHTML='One-click Google Sheet is not switched on in this copy yet. Use <b>Advanced: link via Apps Script</b> below, or ask your seller.'}
@@ -1213,7 +1244,7 @@ async function loadDemo(){
 let cLocalDel=null,CLOUD=null,cKey=null,cRev=0,cDirty=false,cBusy=false,cTimer=null,cFail=0;
 const cloudKey=dk=>pbk(dk,te.encode('cashflow-cloud-v1'),'key');
 async function cloudLoad(token){const r=await api('cloudGet',{token});if(!r.ok){if(r.error==='Unknown action')return'nocloud';throw new Error(r.error||'Cloud error')}
-  cRev=r.rev||0;return r.data?await decObj(cKey,JSON.parse(r.data)):null}
+  cRev=r.rev||0;if(r.drive)setDrive(r.drive);if(!r.data&&r.plain){try{return JSON.parse(r.plain)}catch(e){}}return r.data?await decObj(cKey,JSON.parse(r.data)):null}
 async function migrateToCloud(dk,token){try{const k=await cloudKey(dk);const prev=cKey;cKey=k;const rd=await cloudLoad(token);if(rd==='nocloud'){cKey=prev;return}
   CLOUD=true;S=normalize(mergeData(S,rd&&normalize(rd)));SES.dk=true;cLocalDel=SES.user;cDirty=true;ccWrite(true);cloudPush();await rememberSes();render()}catch(e){}}
 const uniqDel=L=>{const m=new Map();(L||[]).forEach(x=>{const id=x&&x.id||x;if(id&&!m.has(id))m.set(id,typeof x==='object'?x:{id,t:0})});return[...m.values()].slice(-3000)};
@@ -1228,7 +1259,7 @@ function setCS(st){const e=$('cloudSt');if(!e)return;if(!st||!CLOUD){e.style.dis
 async function cloudPush(force){
   if(!CLOUD||!S||!SES||(!cDirty&&!force))return;if(cBusy){cDirty=true;return}
   cBusy=true;cDirty=false;const snap=JSON.parse(JSON.stringify(S)),key=cKey,token=SES.token,base=cRev,snapUser=SES.user;setCS('saving');
-  try{const enc=await encObj(key,snap);const r=await api('cloudPut',{token,data:JSON.stringify(enc),baseRev:base});
+  try{const enc=await encObj(key,snap);const body={token,data:JSON.stringify(enc),baseRev:base};if(DRIVE&&DRIVE.linked)body.mirror=mirrorOf(snap);const r=await api('cloudPut',body);if(r.drive)driveResult(r.drive);
     if(r.conflict){const rm=r.data?await decObj(key,JSON.parse(r.data)):null;cRev=r.rev;if(S){S=normalize(mergeData(S,rm));cDirty=true;render()}}
     else if(!r.ok)throw new Error(r.error);else{cRev=r.rev;cFail=0;if(!cDirty)ccWrite(false);if(cLocalDel&&cLocalDel===snapUser){localStorage.removeItem(dataKey(cLocalDel));cLocalDel=null}}
     setCS(cDirty?'saving':'saved')}
